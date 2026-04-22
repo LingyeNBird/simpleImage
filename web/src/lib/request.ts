@@ -1,7 +1,11 @@
 import axios, {AxiosError, type AxiosRequestConfig} from "axios";
 
 import webConfig from "@/constants/common-env";
-import {clearStoredAuthKey, getStoredAuthKey} from "@/store/auth";
+import {
+    clearStoredAuthSession,
+    getStoredAuthSession,
+    isPublicAuthPath,
+} from "@/store/auth";
 
 type RequestConfig = AxiosRequestConfig & {
     redirectOnUnauthorized?: boolean;
@@ -13,13 +17,11 @@ const request = axios.create({
 
 request.interceptors.request.use(async (config) => {
     const nextConfig = {...config};
-    const authKey = await getStoredAuthKey();
+    const session = await getStoredAuthSession();
     const headers = {...(nextConfig.headers || {})} as Record<string, string>;
-    if (authKey && !headers.Authorization) {
-        headers.Authorization = `Bearer ${authKey}`;
+    if (session?.token && !headers.Authorization) {
+        headers.Authorization = `Bearer ${session.token}`;
     }
-    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-    // @ts-expect-error
     nextConfig.headers = headers;
     return nextConfig;
 });
@@ -30,10 +32,17 @@ request.interceptors.response.use(
         const status = error.response?.status;
         const shouldRedirect = (error.config as RequestConfig | undefined)?.redirectOnUnauthorized !== false;
         if (status === 401 && shouldRedirect && typeof window !== "undefined") {
-            // Avoid redirect loop — only redirect if not already on /login
-            if (!window.location.pathname.startsWith("/login")) {
-                await clearStoredAuthKey();
-                window.location.replace("/login");
+            const session = await getStoredAuthSession();
+            const pathname = window.location.pathname;
+            const redirectTo = pathname.startsWith("/accounts") || pathname.startsWith("/settings") || pathname.startsWith("/admin")
+                ? "/admin/login"
+                : session?.role === "admin"
+                    ? "/admin/login"
+                    : "/login";
+
+            if (!isPublicAuthPath(pathname)) {
+                await clearStoredAuthSession();
+                window.location.replace(redirectTo);
                 // Return a never-resolving promise to prevent further error handling
                 // while the browser navigates away
                 return new Promise(() => {});

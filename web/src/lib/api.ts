@@ -3,6 +3,34 @@ import { httpRequest } from "@/lib/request";
 export type AccountType = "Free" | "Plus" | "Pro" | "Team";
 export type AccountStatus = "正常" | "限流" | "异常" | "禁用";
 export type ImageModel = "gpt-image-1" | "gpt-image-2";
+export type AuthRole = "admin" | "user";
+
+export type CurrentIdentity = {
+  role: AuthRole;
+  id?: string;
+  username?: string;
+  quota?: number;
+};
+
+export type AdminUser = {
+  id: string;
+  username: string;
+  quota: number;
+  created_at?: string;
+  updated_at?: string;
+};
+
+type AuthResponse = {
+  ok: boolean;
+  role: AuthRole;
+  token?: string;
+  user?: {
+    id?: string;
+    username?: string;
+    quota?: number;
+  };
+  version?: string;
+};
 
 export type Account = {
   id: string;
@@ -49,14 +77,116 @@ type AccountUpdateResponse = {
 };
 
 export async function login(authKey: string) {
+  return loginAdmin(authKey);
+}
+
+export async function loginAdmin(authKey: string) {
   const normalizedAuthKey = String(authKey || "").trim();
-  return httpRequest<{ ok: boolean }>("/auth/login", {
+  return httpRequest<AuthResponse>("/auth/login", {
     method: "POST",
     body: {},
     headers: {
       Authorization: `Bearer ${normalizedAuthKey}`,
     },
     redirectOnUnauthorized: false,
+  });
+}
+
+export async function registerUser(payload: {
+  username: string;
+  password: string;
+}) {
+  return httpRequest<AuthResponse>("/auth/register", {
+    method: "POST",
+    body: payload,
+    redirectOnUnauthorized: false,
+  });
+}
+
+export async function loginUser(payload: { username: string; password: string }) {
+  return httpRequest<AuthResponse>("/auth/login", {
+    method: "POST",
+    body: payload,
+    redirectOnUnauthorized: false,
+  });
+}
+
+export async function fetchCurrentIdentity() {
+  const data = await httpRequest<{
+    role: AuthRole;
+    version?: string;
+    user?: {
+      id?: string;
+      username?: string;
+      quota?: number;
+    };
+  }>("/auth/me", {
+    redirectOnUnauthorized: false,
+  });
+
+  if (data.role === "admin") {
+    return { role: "admin" } satisfies CurrentIdentity;
+  }
+
+  return {
+    role: "user",
+    id: data.user?.id,
+    username: data.user?.username,
+    quota: data.user?.quota,
+  } satisfies CurrentIdentity;
+}
+
+export async function redeemUserQuota(keys: string[]) {
+  return httpRequest<{
+    redeemed: number;
+    amount: number;
+    redeemed_keys: string[];
+    invalid_keys: string[];
+    used_keys: string[];
+    user?: { id?: string; username?: string; quota?: number };
+  }>("/auth/redeem", {
+    method: "POST",
+    body: { keys },
+  });
+}
+
+export async function fetchAdminUsers() {
+  return httpRequest<{ items: AdminUser[] }>("/api/users");
+}
+
+export async function createAdminUser(payload: {
+  username: string;
+  password: string;
+  quota?: number;
+}) {
+  return httpRequest<{ item: AdminUser; items: AdminUser[] }>("/api/users", {
+    method: "POST",
+    body: payload,
+  });
+}
+
+export async function deleteAdminUser(userId: string) {
+  return httpRequest<{ items: AdminUser[] }>(`/api/users/${userId}`, {
+    method: "DELETE",
+  });
+}
+
+export async function updateAdminUserQuota(userId: string, quota: number) {
+  return httpRequest<{ item: AdminUser; items: AdminUser[] }>(`/api/users/${userId}/quota`, {
+    method: "POST",
+    body: {
+      quota,
+    },
+  });
+}
+
+export async function generateAdminRedeemKeys(payload: {
+  amount: number;
+  quantity: number;
+}) {
+  return httpRequest<{ items: Array<{ key: string; amount: number }> }>("/api/redeem-keys/generate", {
+    method: "POST",
+    body: payload,
   });
 }
 
