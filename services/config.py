@@ -17,6 +17,8 @@ class AppSettings:
     host: str
     port: int
     accounts_file: Path
+    users_file: Path
+    redeem_keys_file: Path
     refresh_account_interval_minute: int
 
 
@@ -60,11 +62,11 @@ def _load_settings() -> AppSettings:
     if not auth_key:
         raise ValueError(
             "❌ auth-key 未设置！\n"
-            "请按以下任意一种方式解决：\n"
-            "1. 在 Render 的 Environment 变量中添加：\n"
-            "   CHATGPT2API_AUTH_KEY = your_real_auth_key\n"
-            "2. 或者在 config.json 中填写：\n"
-            '   "auth-key": "your_real_auth_key"'
+            + "请按以下任意一种方式解决：\n"
+            + "1. 在 Render 的 Environment 变量中添加：\n"
+            + "   CHATGPT2API_AUTH_KEY = your_real_auth_key\n"
+            + "2. 或者在 config.json 中填写：\n"
+            + '   "auth-key": "your_real_auth_key"'
         )
 
     refresh_account_interval_minute = cast(
@@ -76,6 +78,8 @@ def _load_settings() -> AppSettings:
         host="0.0.0.0",
         port=8000,
         accounts_file=DATA_DIR / "accounts.json",
+        users_file=DATA_DIR / "users.json",
+        redeem_keys_file=DATA_DIR / "redeem_keys.json",
         refresh_account_interval_minute=refresh_account_interval_minute,
     )
 
