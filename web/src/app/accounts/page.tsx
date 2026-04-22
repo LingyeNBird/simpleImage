@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ComponentProps } from "react";
+import { useRouter } from "next/navigation";
 import {
   Ban,
   CheckCircle2,
@@ -50,6 +51,7 @@ import {
   type AccountType,
 } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { getStoredAuthSession } from "@/store/auth";
 
 import { AccountImportDialog } from "./components/account-import-dialog";
 
@@ -158,7 +160,9 @@ function normalizeAccounts(items: Account[]): Account[] {
 }
 
 export default function AccountsPage() {
+  const router = useRouter();
   const didLoadRef = useRef(false);
+  const [guardReady, setGuardReady] = useState(false);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [query, setQuery] = useState("");
@@ -174,6 +178,34 @@ export default function AccountsPage() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const validateRole = async () => {
+      const session = await getStoredAuthSession();
+      if (cancelled) {
+        return;
+      }
+
+      if (!session) {
+        router.replace("/admin/login");
+        return;
+      }
+
+      if (session.role !== "admin") {
+        router.replace("/image");
+        return;
+      }
+
+      setGuardReady(true);
+    };
+
+    void validateRole();
+    return () => {
+      cancelled = true;
+    };
+  }, [router]);
 
   const loadAccounts = async (silent = false) => {
     if (!silent) {
@@ -194,12 +226,19 @@ export default function AccountsPage() {
   };
 
   useEffect(() => {
+    if (!guardReady) {
+      return;
+    }
     if (didLoadRef.current) {
       return;
     }
     didLoadRef.current = true;
     void loadAccounts();
-  }, []);
+  }, [guardReady]);
+
+  if (!guardReady) {
+    return null;
+  }
 
   const filteredAccounts = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();

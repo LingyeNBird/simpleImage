@@ -1,10 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
 import { ImageLightbox } from "@/components/image-lightbox";
-import { editImage, fetchAccounts, generateImage, type Account, type ImageModel } from "@/lib/api";
+import { editImage, fetchCurrentIdentity, generateImage, redeemUserQuota, type CurrentIdentity, type ImageModel } from "@/lib/api";
 import { ImageComposer } from "@/app/image/components/image-composer";
 import { ImageResults } from "@/app/image/components/image-results";
 import { ImageSidebar } from "@/app/image/components/image-sidebar";
@@ -18,6 +19,7 @@ import {
   type StoredImage,
   type StoredReferenceImage,
 } from "@/store/image-conversations";
+import { getStoredAuthSession } from "@/store/auth";
 
 const imageModelOptions: Array<{ label: string; value: ImageModel }> = [
   { label: "gpt-image-1", value: "gpt-image-1" },
@@ -45,9 +47,23 @@ function formatConversationTime(value: string) {
   }).format(date);
 }
 
-function formatAvailableQuota(accounts: Account[]) {
-  const availableAccounts = accounts.filter((account) => account.status !== "禁用");
-  return String(availableAccounts.reduce((sum, account) => sum + Math.max(0, account.quota), 0));
+function resolveAvailableQuota(identity: CurrentIdentity | null) {
+  if (!identity) {
+    return "0";
+  }
+
+  if (identity.role === "admin") {
+    return "∞";
+  }
+
+  const quotaCandidate =
+    typeof identity.quota === "number"
+      ? identity.quota
+      : typeof (identity as { remaining_quota?: number }).remaining_quota === "number"
+        ? Number((identity as { remaining_quota?: number }).remaining_quota)
+        : 0;
+
+  return String(Math.max(0, Number(quotaCandidate) || 0));
 }
 
 async function normalizeConversationHistory(items: ImageConversation[]) {
@@ -97,11 +113,13 @@ function readFileAsDataUrl(file: File) {
 }
 
 export default function ImagePage() {
+  const router = useRouter();
   const didLoadQuotaRef = useRef(false);
   const resultsViewportRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const [guardReady, setGuardReady] = useState(false);
   const [imagePrompt, setImagePrompt] = useState("");
   const [imageCount, setImageCount] = useState("1");
   const [imageMode, setImageMode] = useState<ImageConversationMode>("generate");
@@ -112,7 +130,9 @@ export default function ImagePage() {
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
   const [generatingIds, setGeneratingIds] = useState<Set<string>>(new Set());
-  const [availableQuota, setAvailableQuota] = useState("加载中");
+  const [availableQuota, setAvailableQuota] = useState("0");
+  const [redeemText, setRedeemText] = useState("");
+  const [isRedeeming, setIsRedeeming] = useState(false);
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState(0);
 
@@ -158,6 +178,33 @@ export default function ImagePage() {
   useEffect(() => {
     let cancelled = false;
 
+    const ensureSignedIn = async () => {
+      const session = await getStoredAuthSession();
+      if (cancelled) {
+        return;
+      }
+
+      if (!session) {
+        router.replace("/login");
+        return;
+      }
+
+      setGuardReady(true);
+    };
+
+    void ensureSignedIn();
+    return () => {
+      cancelled = true;
+    };
+  }, [router]);
+
+  useEffect(() => {
+    if (!guardReady) {
+      return;
+    }
+
+    let cancelled = false;
+
     const loadHistory = async () => {
       try {
         const items = await listImageConversations();
@@ -180,18 +227,22 @@ export default function ImagePage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [guardReady]);
 
   const loadQuota = useCallback(async () => {
     try {
-      const data = await fetchAccounts();
-      setAvailableQuota(formatAvailableQuota(data.items));
+      const identity = await fetchCurrentIdentity();
+      setAvailableQuota(resolveAvailableQuota(identity));
     } catch {
-      setAvailableQuota((prev) => (prev === "加载中" ? "—" : prev));
+      setAvailableQuota((prev) => (prev === "0" ? "0" : prev));
     }
   }, []);
 
   useEffect(() => {
+    if (!guardReady) {
+      return;
+    }
+
     if (didLoadQuotaRef.current) {
       return;
     }
@@ -210,7 +261,7 @@ export default function ImagePage() {
     return () => {
       window.removeEventListener("focus", handleFocus);
     };
-  }, [loadQuota]);
+  }, [guardReady, loadQuota]);
 
   useEffect(() => {
     if (!selectedConversation && !isSelectedGenerating) {
@@ -464,6 +515,35 @@ export default function ImagePage() {
     }
   };
 
+  const handleRedeem = async () => {
+    const keys = redeemText
+      .split(/\r?\n|,|;|\s+/)
+      .map((item) => item.trim())
+      .filter(Boolean);
+
+    if (keys.length === 0) {
+      toast.error("请输入兑换码");
+      return;
+    }
+
+    setIsRedeeming(true);
+    try {
+      await redeemUserQuota(keys);
+      setRedeemText("");
+      await loadQuota();
+      toast.success(`已提交 ${keys.length} 个兑换码`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "兑换失败";
+      toast.error(message);
+    } finally {
+      setIsRedeeming(false);
+    }
+  };
+
+  if (!guardReady) {
+    return null;
+  }
+
   return (
     <>
       <section className="mx-auto grid h-[calc(100vh-5rem)] min-h-0 w-full max-w-[1380px] grid-cols-1 gap-3 px-3 pb-6 lg:grid-cols-[240px_minmax(0,1fr)]">
@@ -498,6 +578,8 @@ export default function ImagePage() {
             model={imageModel}
             imageCount={imageCount}
             availableQuota={availableQuota}
+            redeemText={redeemText}
+            isRedeeming={isRedeeming}
             hasAnyGenerating={hasAnyGenerating}
             generatingCount={generatingIds.size}
             referenceImages={referenceImages}
@@ -509,6 +591,8 @@ export default function ImagePage() {
             onModelChange={setImageModel}
             onImageCountChange={setImageCount}
             onSubmit={handleGenerateImage}
+            onRedeemTextChange={setRedeemText}
+            onRedeem={handleRedeem}
             onPickReferenceImage={() => fileInputRef.current?.click()}
             onReferenceImageChange={handleReferenceImageChange}
             onRemoveReferenceImage={handleRemoveReferenceImage}

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   Eye,
   EyeOff,
@@ -47,6 +48,7 @@ import {
   type CPAPool,
   type CPARemoteFile,
 } from "@/lib/api";
+import { getStoredAuthSession } from "@/store/auth";
 
 const PAGE_SIZE_OPTIONS = ["50", "100", "200"] as const;
 
@@ -68,8 +70,10 @@ function normalizeFiles(items: CPARemoteFile[]) {
 }
 
 export default function SettingsPage() {
+  const router = useRouter();
   const didLoadRef = useRef(false);
   const pollTimerRef = useRef<number | null>(null);
+  const [guardReady, setGuardReady] = useState(false);
 
   const [pools, setPools] = useState<CPAPool[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -94,6 +98,34 @@ export default function SettingsPage() {
   const [pageSize, setPageSize] = useState<(typeof PAGE_SIZE_OPTIONS)[number]>("100");
   const [isStartingImport, setIsStartingImport] = useState(false);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    const validateRole = async () => {
+      const session = await getStoredAuthSession();
+      if (cancelled) {
+        return;
+      }
+
+      if (!session) {
+        router.replace("/admin/login");
+        return;
+      }
+
+      if (session.role !== "admin") {
+        router.replace("/image");
+        return;
+      }
+
+      setGuardReady(true);
+    };
+
+    void validateRole();
+    return () => {
+      cancelled = true;
+    };
+  }, [router]);
+
   const loadPools = async () => {
     setIsLoading(true);
     try {
@@ -107,14 +139,20 @@ export default function SettingsPage() {
   };
 
   useEffect(() => {
+    if (!guardReady) {
+      return;
+    }
     if (didLoadRef.current) {
       return;
     }
     didLoadRef.current = true;
     void loadPools();
-  }, []);
+  }, [guardReady]);
 
   useEffect(() => {
+    if (!guardReady) {
+      return;
+    }
     const runningPoolIds = pools
       .filter((pool) => pool.import_job?.status === "pending" || pool.import_job?.status === "running")
       .map((pool) => pool.id);
@@ -147,7 +185,11 @@ export default function SettingsPage() {
         pollTimerRef.current = null;
       }
     };
-  }, [pools]);
+  }, [guardReady, pools]);
+
+  if (!guardReady) {
+    return null;
+  }
 
   const openAddDialog = () => {
     setEditingPool(null);
