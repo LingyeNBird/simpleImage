@@ -269,10 +269,6 @@ export default function AccountsPage() {
     void loadAccounts();
   }, [guardReady]);
 
-  if (!guardReady) {
-    return null;
-  }
-
   const filteredAccounts = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
     return accounts.filter((account) => {
@@ -324,6 +320,10 @@ export default function AccountsPage() {
 
     return items;
   }, [pageCount, safePage]);
+
+  if (!guardReady) {
+    return null;
+  }
 
   const handleDeleteTokens = async (tokens: string[]) => {
     if (tokens.length === 0) {

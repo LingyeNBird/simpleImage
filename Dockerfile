@@ -2,7 +2,7 @@ ARG BUILDPLATFORM
 ARG TARGETPLATFORM
 ARG TARGETARCH
 
-FROM --platform=$BUILDPLATFORM node:22-alpine AS web-build
+FROM --platform=$BUILDPLATFORM node:22-bookworm-slim AS web-build
 
 WORKDIR /app/web
 
@@ -30,12 +30,17 @@ RUN pip install --no-cache-dir uv
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev --no-install-project
 
+COPY --from=web-build /usr/local/ /usr/local/
+
 COPY main.py ./
 COPY config.json ./
+COPY docker_entrypoint.py ./
 COPY VERSION ./
 COPY services ./services
+COPY --from=web-build /app/web ./web
 COPY --from=web-build /app/web/out ./web_dist
 
 EXPOSE 80
+EXPOSE 8000
 
-CMD ["uv", "run", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "80", "--access-log"]
+CMD ["python", "docker_entrypoint.py"]
