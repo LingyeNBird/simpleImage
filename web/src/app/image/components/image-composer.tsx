@@ -1,39 +1,28 @@
 "use client";
+
 import { ArrowUp, ImagePlus, LoaderCircle, X } from "lucide-react";
 import { useMemo, useState, type ClipboardEvent, type RefObject } from "react";
 
 import { ImageLightbox } from "@/components/image-lightbox";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import type { ImageModel } from "@/lib/api";
 import type { ImageConversationMode } from "@/store/image-conversations";
 import { cn } from "@/lib/utils";
 
 type ImageComposerProps = {
   mode: ImageConversationMode;
   prompt: string;
-  model: ImageModel;
   imageCount: string;
   availableQuota: string;
   redeemText: string;
   isRedeeming: boolean;
-  hasAnyGenerating: boolean;
-  generatingCount: number;
+  activeTaskCount: number;
   referenceImages: Array<{ name: string; dataUrl: string }>;
   textareaRef: RefObject<HTMLTextAreaElement | null>;
   fileInputRef: RefObject<HTMLInputElement | null>;
-  imageModelOptions: Array<{ label: string; value: ImageModel }>;
   onModeChange: (value: ImageConversationMode) => void;
   onPromptChange: (value: string) => void;
-  onModelChange: (value: ImageModel) => void;
   onImageCountChange: (value: string) => void;
   onSubmit: () => void | Promise<void>;
   onRedeemTextChange: (value: string) => void;
@@ -46,20 +35,16 @@ type ImageComposerProps = {
 export function ImageComposer({
   mode,
   prompt,
-  model,
   imageCount,
   availableQuota,
   redeemText,
   isRedeeming,
-  hasAnyGenerating,
-  generatingCount,
+  activeTaskCount,
   referenceImages,
   textareaRef,
   fileInputRef,
-  imageModelOptions,
   onModeChange,
   onPromptChange,
-  onModelChange,
   onImageCountChange,
   onSubmit,
   onRedeemTextChange,
@@ -76,10 +61,6 @@ export function ImageComposer({
   );
 
   const handleTextareaPaste = (event: ClipboardEvent<HTMLTextAreaElement>) => {
-    if (mode !== "edit") {
-      return;
-    }
-
     const imageFiles = Array.from(event.clipboardData.files).filter((file) => file.type.startsWith("image/"));
     if (imageFiles.length === 0) {
       return;
@@ -159,7 +140,9 @@ export function ImageComposer({
               value={prompt}
               onChange={(event) => onPromptChange(event.target.value)}
               onPaste={handleTextareaPaste}
-              placeholder={mode === "edit" ? "描述你希望如何修改这张参考图，可直接粘贴图片" : "输入你想要生成的画面"}
+              placeholder={
+                mode === "edit" ? "描述你希望如何修改这张参考图，可直接粘贴图片" : "输入你想要生成的画面，也可直接粘贴图片"
+              }
               onKeyDown={(event) => {
                 if (event.key === "Enter" && !event.shiftKey) {
                   event.preventDefault();
@@ -173,7 +156,7 @@ export function ImageComposer({
               <div className="space-y-3">
                 <div className="flex items-end justify-between gap-3">
                   <div className="flex min-w-0 flex-1 flex-wrap items-center gap-3">
-                    {mode === "edit" && (
+                    {mode === "edit" ? (
                       <Button
                         type="button"
                         variant="outline"
@@ -183,26 +166,14 @@ export function ImageComposer({
                         <ImagePlus className="size-4" />
                         {referenceImages.length > 0 ? "继续添加参考图" : "上传参考图"}
                       </Button>
-                    )}
+                    ) : null}
                     <div className="rounded-full bg-stone-100 px-3 py-2 text-xs font-medium text-stone-600">剩余额度 {availableQuota}</div>
-                    {hasAnyGenerating && (
+                    {activeTaskCount > 0 ? (
                       <div className="flex items-center gap-1.5 rounded-full bg-amber-50 px-3 py-2 text-xs font-medium text-amber-700">
                         <LoaderCircle className="size-3 animate-spin" />
-                        {generatingCount} 个任务进行中
+                        {activeTaskCount} 个任务处理中或排队中
                       </div>
-                    )}
-                    <Select value={model} onValueChange={(value) => onModelChange(value as ImageModel)}>
-                      <SelectTrigger className="h-10 w-[164px] rounded-full border-stone-200 bg-white text-sm font-medium text-stone-700 shadow-none focus-visible:ring-0">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {imageModelOptions.map((item) => (
-                          <SelectItem key={item.value} value={item.value}>
-                            {item.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    ) : null}
                     <div className="flex items-center gap-2 rounded-full border border-stone-200 bg-white px-3 py-1">
                       <span className="text-sm font-medium text-stone-700">张数</span>
                       <Input
@@ -220,7 +191,7 @@ export function ImageComposer({
                         文生图
                       </ModeButton>
                       <ModeButton active={mode === "edit"} onClick={() => onModeChange("edit")}>
-                        编辑图
+                        图生图
                       </ModeButton>
                     </div>
                   </div>
