@@ -94,6 +94,10 @@ const metricCards = [
   { key: "quota", label: "剩余额度", color: "text-blue-500", icon: RefreshCw },
 ] as const;
 
+function normalizeAccountStatus(value: unknown): AccountStatus {
+  return value === "正常" || value === "限流" || value === "异常" || value === "禁用" ? value : "异常";
+}
+
 function isUnlimitedImageQuotaAccount(account: Account) {
   return account.type === "Pro" || account.type === "ProLite";
 }
@@ -168,7 +172,9 @@ function downloadTokens(accounts: Account[]) {
 }
 
 function normalizeAccounts(items: Account[]): Account[] {
-  return items.map((item) => ({
+  const safeItems = Array.isArray(items) ? items : [];
+
+  return safeItems.map((item) => ({
     ...item,
     type:
       item.type === "Plus" ||
@@ -178,6 +184,10 @@ function normalizeAccounts(items: Account[]): Account[] {
       item.type === "Free"
         ? item.type
         : "Free",
+    status: normalizeAccountStatus(item.status),
+    quota: Number.isFinite(item.quota) ? item.quota : 0,
+    success: Number.isFinite(item.success) ? item.success : 0,
+    fail: Number.isFinite(item.fail) ? item.fail : 0,
   }));
 }
 
@@ -235,8 +245,9 @@ export default function AccountsPage() {
     }
     try {
       const data = await fetchAccounts();
-      setAccounts(normalizeAccounts(data.items));
-      setSelectedIds((prev) => prev.filter((id) => data.items.some((item) => item.id === id)));
+      const nextItems = normalizeAccounts(data.items ?? []);
+      setAccounts(nextItems);
+      setSelectedIds((prev) => prev.filter((id) => nextItems.some((item) => item.id === id)));
     } catch (error) {
       const message = error instanceof Error ? error.message : "加载账户失败";
       toast.error(message);
@@ -323,8 +334,9 @@ export default function AccountsPage() {
     setIsDeleting(true);
     try {
       const data = await deleteAccounts(tokens);
-      setAccounts(normalizeAccounts(data.items));
-      setSelectedIds((prev) => prev.filter((id) => data.items.some((item) => item.id === id)));
+      const nextItems = normalizeAccounts(data.items ?? []);
+      setAccounts(nextItems);
+      setSelectedIds((prev) => prev.filter((id) => nextItems.some((item) => item.id === id)));
       toast.success(`删除 ${data.removed ?? 0} 个账户`);
     } catch (error) {
       const message = error instanceof Error ? error.message : "删除账户失败";
@@ -343,8 +355,9 @@ export default function AccountsPage() {
     setIsRefreshing(true);
     try {
       const data = await refreshAccounts(accessTokens);
-      setAccounts(normalizeAccounts(data.items));
-      setSelectedIds((prev) => prev.filter((id) => data.items.some((item) => item.id === id)));
+      const nextItems = normalizeAccounts(data.items ?? []);
+      setAccounts(nextItems);
+      setSelectedIds((prev) => prev.filter((id) => nextItems.some((item) => item.id === id)));
       if (data.errors.length > 0) {
         const firstError = data.errors[0]?.error;
         toast.error(
@@ -380,8 +393,9 @@ export default function AccountsPage() {
         status: editStatus,
         quota: Number(editQuota || 0),
       });
-      setAccounts(normalizeAccounts(data.items));
-      setSelectedIds((prev) => prev.filter((id) => data.items.some((item) => item.id === id)));
+      const nextItems = normalizeAccounts(data.items ?? []);
+      setAccounts(nextItems);
+      setSelectedIds((prev) => prev.filter((id) => nextItems.some((item) => item.id === id)));
       setEditingAccount(null);
       toast.success("账号信息已更新");
     } catch (error) {
@@ -432,7 +446,7 @@ export default function AccountsPage() {
           <AccountImportDialog
             disabled={isLoading || isRefreshing || isDeleting}
             onImported={(items) => {
-              setAccounts(normalizeAccounts(items));
+              setAccounts(normalizeAccounts(items ?? []));
               setSelectedIds([]);
               setPage(1);
             }}
@@ -688,7 +702,7 @@ export default function AccountsPage() {
                 </thead>
                 <tbody>
                   {currentRows.map((account) => {
-                    const status = statusMeta[account.status];
+                    const status = statusMeta[normalizeAccountStatus(account.status)];
                     const StatusIcon = status.icon;
 
                     return (
