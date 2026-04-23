@@ -603,6 +603,11 @@ def create_app() -> FastAPI:
             raise HTTPException(status_code=400, detail={"error": str(exc)}) from exc
         return {"items": items}
 
+    @router.get("/api/redeem-keys")
+    async def list_redeem_keys(authorization: str | None = Header(default=None)):
+        auth_service.require_admin(authorization)
+        return {"items": user_service.list_redeem_keys()}
+
     # ── CPA multi-pool endpoints ────────────────────────────────────
 
     @router.get("/api/cpa/pools")

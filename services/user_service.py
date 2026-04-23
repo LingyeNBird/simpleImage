@@ -392,6 +392,25 @@ class UserService:
             self._save_redeem_keys()
             return generated
 
+    def list_redeem_keys(self) -> list[dict[str, object]]:
+        with self._lock:
+            items = []
+            for item in reversed(self._redeem_keys):
+                if not isinstance(item, dict):
+                    continue
+                redeemed_by = self._normalize_username(item.get("redeemed_by")) or None
+                items.append(
+                    {
+                        "key": str(item.get("key") or "").strip(),
+                        "amount": max(0, int(item.get("amount") or 0)),
+                        "redeemed": bool(redeemed_by),
+                        "redeemed_by": redeemed_by,
+                        "created_at": str(item.get("created_at") or "").strip() or None,
+                        "redeemed_at": str(item.get("redeemed_at") or "").strip() or None,
+                    }
+                )
+            return items
+
     def redeem_keys(self, username: str, raw_keys: list[str]) -> dict[str, object]:
         normalized_username = self._normalize_username(username)
         if not normalized_username:

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Copy, KeyRound, LoaderCircle, Plus, RefreshCw, Trash2, UserRound } from "lucide-react";
+import { KeyRound, LoaderCircle, Plus, RefreshCw, Trash2, UserRound } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -13,7 +13,6 @@ import {
   createAdminUser,
   deleteAdminUser,
   fetchAdminUsers,
-  generateAdminRedeemKeys,
   updateAdminUserQuota,
   type AdminUser,
 } from "@/lib/api";
@@ -40,11 +39,6 @@ export default function AdminUsersPage() {
   const [editingQuotaUserId, setEditingQuotaUserId] = useState<string | null>(null);
   const [quotaDrafts, setQuotaDrafts] = useState<Record<string, string>>({});
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
-
-  const [redeemAmount, setRedeemAmount] = useState("10");
-  const [redeemQuantity, setRedeemQuantity] = useState("1");
-  const [isGeneratingKeys, setIsGeneratingKeys] = useState(false);
-  const [generatedKeys, setGeneratedKeys] = useState<string[]>([]);
 
   const userCount = users.length;
   const totalQuota = useMemo(
@@ -177,26 +171,6 @@ export default function AdminUsersPage() {
     }
   };
 
-  const handleGenerateKeys = async () => {
-    const parsedAmount = Math.max(1, Number(redeemAmount) || 1);
-    const parsedQuantity = Math.max(1, Math.min(100, Number(redeemQuantity) || 1));
-
-    setIsGeneratingKeys(true);
-    try {
-      const data = await generateAdminRedeemKeys({
-        amount: parsedAmount,
-        quantity: parsedQuantity,
-      });
-      setGeneratedKeys(data.items.map((item) => item.key));
-      toast.success(`已生成 ${data.items.length} 个兑换码`);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "生成兑换码失败";
-      toast.error(message);
-    } finally {
-      setIsGeneratingKeys(false);
-    }
-  };
-
   if (!guardReady) {
     return null;
   }
@@ -240,13 +214,13 @@ export default function AdminUsersPage() {
         </Card>
         <Card className="rounded-2xl border-white/80 bg-white/90 shadow-sm">
           <CardContent className="p-4">
-            <div className="mb-3 text-xs text-stone-400">最近生成兑换码</div>
-            <div className="text-sm font-medium text-stone-700">{generatedKeys.length > 0 ? `${generatedKeys.length} 个` : "暂无"}</div>
+            <div className="mb-3 text-xs text-stone-400">兑换码管理</div>
+            <div className="text-sm font-medium text-stone-700">请前往独立页面生成与查看</div>
           </CardContent>
         </Card>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[1.2fr_1fr]">
+      <div className="grid gap-4">
         <Card className="rounded-2xl border-white/80 bg-white/90 shadow-sm">
           <CardContent className="space-y-4 p-6">
             <div className="flex items-center justify-between">
@@ -286,65 +260,6 @@ export default function AdminUsersPage() {
               {isCreating ? <LoaderCircle className="size-4 animate-spin" /> : <Plus className="size-4" />}
               创建用户
             </Button>
-          </CardContent>
-        </Card>
-
-        <Card className="rounded-2xl border-white/80 bg-white/90 shadow-sm">
-          <CardContent className="space-y-4 p-6">
-            <h2 className="text-lg font-semibold tracking-tight">兑换码生成</h2>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Input
-                type="number"
-                min="1"
-                value={redeemAmount}
-                onChange={(event) => setRedeemAmount(event.target.value)}
-                placeholder="每个兑换码额度"
-                className="h-11 rounded-xl border-stone-200 bg-white"
-              />
-              <Input
-                type="number"
-                min="1"
-                max="100"
-                value={redeemQuantity}
-                onChange={(event) => setRedeemQuantity(event.target.value)}
-                placeholder="生成数量"
-                className="h-11 rounded-xl border-stone-200 bg-white"
-              />
-            </div>
-            <Button
-              variant="outline"
-              className="h-10 rounded-xl border-stone-200 bg-white px-4 text-stone-700"
-              onClick={() => void handleGenerateKeys()}
-              disabled={isGeneratingKeys}
-            >
-              {isGeneratingKeys ? <LoaderCircle className="size-4 animate-spin" /> : <KeyRound className="size-4" />}
-              生成兑换码
-            </Button>
-            <div className="space-y-2 rounded-xl border border-stone-200 bg-white p-3">
-              <div className="flex items-center justify-between text-xs text-stone-500">
-                <span>结果</span>
-                <button
-                  type="button"
-                  className="inline-flex items-center gap-1 text-stone-500 transition hover:text-stone-900"
-                  onClick={() => {
-                    if (generatedKeys.length === 0) {
-                      return;
-                    }
-                    void navigator.clipboard.writeText(`${generatedKeys.join("\n")}\n`);
-                    toast.success("兑换码已复制");
-                  }}
-                >
-                  <Copy className="size-3.5" />
-                  复制
-                </button>
-              </div>
-              <textarea
-                value={generatedKeys.join("\n")}
-                readOnly
-                className="min-h-[120px] w-full resize-y rounded-lg border border-stone-100 bg-stone-50 px-3 py-2 text-xs leading-5 text-stone-700 outline-none"
-                placeholder="生成后显示在这里"
-              />
-            </div>
           </CardContent>
         </Card>
       </div>

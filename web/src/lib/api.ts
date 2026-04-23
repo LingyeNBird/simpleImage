@@ -20,6 +20,15 @@ export type AdminUser = {
   updated_at?: string;
 };
 
+export type AdminRedeemKey = {
+  key: string;
+  amount: number;
+  redeemed: boolean;
+  redeemed_by?: string | null;
+  created_at?: string | null;
+  redeemed_at?: string | null;
+};
+
 type AuthResponse = {
   ok: boolean;
   role: AuthRole;
@@ -197,6 +206,10 @@ export async function generateAdminRedeemKeys(payload: {
     method: "POST",
     body: payload,
   });
+}
+
+export async function fetchAdminRedeemKeys() {
+  return httpRequest<{ items: AdminRedeemKey[] }>("/api/redeem-keys");
 }
 
 export async function fetchAccounts() {
