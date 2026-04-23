@@ -14,9 +14,6 @@ type ImageComposerProps = {
   mode: ImageConversationMode;
   prompt: string;
   imageCount: string;
-  availableQuota: string;
-  redeemText: string;
-  isRedeeming: boolean;
   activeTaskCount: number;
   referenceImages: Array<{ name: string; dataUrl: string }>;
   textareaRef: RefObject<HTMLTextAreaElement | null>;
@@ -25,8 +22,6 @@ type ImageComposerProps = {
   onPromptChange: (value: string) => void;
   onImageCountChange: (value: string) => void;
   onSubmit: () => void | Promise<void>;
-  onRedeemTextChange: (value: string) => void;
-  onRedeem: () => void | Promise<void>;
   onPickReferenceImage: () => void;
   onReferenceImageChange: (files: File[]) => void | Promise<void>;
   onRemoveReferenceImage: (index: number) => void;
@@ -36,9 +31,6 @@ export function ImageComposer({
   mode,
   prompt,
   imageCount,
-  availableQuota,
-  redeemText,
-  isRedeeming,
   activeTaskCount,
   referenceImages,
   textareaRef,
@@ -47,8 +39,6 @@ export function ImageComposer({
   onPromptChange,
   onImageCountChange,
   onSubmit,
-  onRedeemTextChange,
-  onRedeem,
   onPickReferenceImage,
   onReferenceImageChange,
   onRemoveReferenceImage,
@@ -153,80 +143,56 @@ export function ImageComposer({
             />
 
             <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-white via-white/95 to-transparent px-4 pb-4 pt-6 sm:px-6">
-              <div className="space-y-3">
-                <div className="flex items-end justify-between gap-3">
-                  <div className="flex min-w-0 flex-1 flex-wrap items-center gap-3">
-                    {mode === "edit" ? (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="h-10 rounded-full border-stone-200 bg-white px-4 text-sm font-medium text-stone-700 shadow-none"
-                        onClick={onPickReferenceImage}
-                      >
-                        <ImagePlus className="size-4" />
-                        {referenceImages.length > 0 ? "继续添加参考图" : "上传参考图"}
-                      </Button>
-                    ) : null}
-                    <div className="rounded-full bg-stone-100 px-3 py-2 text-xs font-medium text-stone-600">剩余额度 {availableQuota}</div>
-                    {activeTaskCount > 0 ? (
-                      <div className="flex items-center gap-1.5 rounded-full bg-amber-50 px-3 py-2 text-xs font-medium text-amber-700">
-                        <LoaderCircle className="size-3 animate-spin" />
-                        {activeTaskCount} 个任务处理中或排队中
-                      </div>
-                    ) : null}
-                    <div className="flex items-center gap-2 rounded-full border border-stone-200 bg-white px-3 py-1">
-                      <span className="text-sm font-medium text-stone-700">张数</span>
-                      <Input
-                        type="number"
-                        min="1"
-                        max="10"
-                        step="1"
-                        value={imageCount}
-                        onChange={(event) => onImageCountChange(event.target.value)}
-                        className="h-8 w-[64px] border-0 bg-transparent px-0 text-center text-sm font-medium text-stone-700 shadow-none focus-visible:ring-0"
-                      />
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <ModeButton active={mode === "generate"} onClick={() => onModeChange("generate")}>
-                        文生图
-                      </ModeButton>
-                      <ModeButton active={mode === "edit"} onClick={() => onModeChange("edit")}>
-                        图生图
-                      </ModeButton>
-                    </div>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => void onSubmit()}
-                    disabled={!prompt.trim() || (mode === "edit" && referenceImages.length === 0)}
-                    className="inline-flex size-11 shrink-0 items-center justify-center rounded-full bg-stone-950 text-white transition hover:bg-stone-800 disabled:cursor-not-allowed disabled:bg-stone-300"
-                    aria-label={mode === "edit" ? "编辑图片" : "生成图片"}
-                  >
-                    <ArrowUp className="size-4" />
-                  </button>
-                </div>
-
-                <div className="rounded-2xl border border-stone-200 bg-white/90 p-2">
-                  <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
-                    <Textarea
-                      value={redeemText}
-                      onChange={(event) => onRedeemTextChange(event.target.value)}
-                      placeholder="输入兑换码，每行一个；支持一次提交多个"
-                      className="min-h-[70px] rounded-xl border-stone-100 px-3 py-2 text-sm leading-6"
-                    />
+              <div className="flex items-end justify-between gap-3">
+                <div className="flex min-w-0 flex-1 flex-wrap items-center gap-3">
+                  {mode === "edit" ? (
                     <Button
                       type="button"
                       variant="outline"
-                      className="h-10 rounded-xl border-stone-200 bg-white px-4 text-stone-700"
-                      onClick={() => void onRedeem()}
-                      disabled={!redeemText.trim() || isRedeeming}
+                      className="h-10 rounded-full border-stone-200 bg-white px-4 text-sm font-medium text-stone-700 shadow-none"
+                      onClick={onPickReferenceImage}
                     >
-                      {isRedeeming ? <LoaderCircle className="size-4 animate-spin" /> : null}
-                      兑换额度
+                      <ImagePlus className="size-4" />
+                      {referenceImages.length > 0 ? "继续添加参考图" : "上传参考图"}
                     </Button>
+                  ) : null}
+                  {activeTaskCount > 0 ? (
+                    <div className="flex items-center gap-1.5 rounded-full bg-amber-50 px-3 py-2 text-xs font-medium text-amber-700">
+                      <LoaderCircle className="size-3 animate-spin" />
+                      {activeTaskCount} 个任务处理中或排队中
+                    </div>
+                  ) : null}
+                  <div className="flex items-center gap-2 rounded-full border border-stone-200 bg-white px-3 py-1">
+                    <span className="text-sm font-medium text-stone-700">张数</span>
+                    <Input
+                      type="number"
+                      min="1"
+                      max="10"
+                      step="1"
+                      value={imageCount}
+                      onChange={(event) => onImageCountChange(event.target.value)}
+                      className="h-8 w-[64px] border-0 bg-transparent px-0 text-center text-sm font-medium text-stone-700 shadow-none focus-visible:ring-0"
+                    />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <ModeButton active={mode === "generate"} onClick={() => onModeChange("generate")}>
+                      文生图
+                    </ModeButton>
+                    <ModeButton active={mode === "edit"} onClick={() => onModeChange("edit")}>
+                      图生图
+                    </ModeButton>
                   </div>
                 </div>
+
+                <button
+                  type="button"
+                  onClick={() => void onSubmit()}
+                  disabled={!prompt.trim() || (mode === "edit" && referenceImages.length === 0)}
+                  className="inline-flex size-11 shrink-0 items-center justify-center rounded-full bg-stone-950 text-white transition hover:bg-stone-800 disabled:cursor-not-allowed disabled:bg-stone-300"
+                  aria-label={mode === "edit" ? "编辑图片" : "生成图片"}
+                >
+                  <ArrowUp className="size-4" />
+                </button>
               </div>
             </div>
           </div>

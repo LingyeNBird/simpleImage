@@ -8,6 +8,9 @@ import { ImageComposer } from "@/app/image/components/image-composer";
 import { ImageResults, type ImageLightboxItem } from "@/app/image/components/image-results";
 import { ImageSidebar } from "@/app/image/components/image-sidebar";
 import { ImageLightbox } from "@/components/image-lightbox";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
 import { editImage, fetchCurrentIdentity, generateImage, redeemUserQuota, type CurrentIdentity } from "@/lib/api";
 import {
   clearImageConversations,
@@ -197,6 +200,7 @@ export default function ImagePage() {
   const [availableQuota, setAvailableQuota] = useState("0");
   const [redeemText, setRedeemText] = useState("");
   const [isRedeeming, setIsRedeeming] = useState(false);
+  const [isRedeemDialogOpen, setIsRedeemDialogOpen] = useState(false);
   const [lightboxImages, setLightboxImages] = useState<ImageLightboxItem[]>([]);
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState(0);
@@ -824,6 +828,45 @@ export default function ImagePage() {
         />
 
         <div className="flex min-h-0 flex-col gap-4">
+          {availableQuota !== "∞" ? (
+            <div className="flex justify-end px-2 sm:px-4">
+              <Dialog open={isRedeemDialogOpen} onOpenChange={setIsRedeemDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-9 rounded-full border-stone-200 bg-white px-4 text-xs font-medium text-stone-700 shadow-none"
+                  >
+                    剩余额度 {availableQuota}
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>兑换额度</DialogTitle>
+                    <DialogDescription>输入兑换码，每行一个；支持一次提交多个。</DialogDescription>
+                  </DialogHeader>
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+                    <Textarea
+                      value={redeemText}
+                      onChange={(event) => setRedeemText(event.target.value)}
+                      placeholder="输入兑换码，每行一个；支持一次提交多个"
+                      className="min-h-[88px] rounded-xl border-stone-100 px-3 py-2 text-sm leading-6"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-10 rounded-xl border-stone-200 bg-white px-4 text-stone-700"
+                      onClick={() => void handleRedeem()}
+                      disabled={!redeemText.trim() || isRedeeming}
+                    >
+                      {isRedeeming ? "兑换中..." : "兑换额度"}
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
+            </div>
+          ) : null}
+
           <div
             ref={resultsViewportRef}
             className="hide-scrollbar min-h-0 flex-1 overflow-y-auto px-2 py-3 sm:px-4 sm:py-4"
@@ -840,9 +883,6 @@ export default function ImagePage() {
             mode={imageMode}
             prompt={imagePrompt}
             imageCount={imageCount}
-            availableQuota={availableQuota}
-            redeemText={redeemText}
-            isRedeeming={isRedeeming}
             activeTaskCount={activeTaskCount}
             referenceImages={referenceImages}
             textareaRef={textareaRef}
@@ -851,8 +891,6 @@ export default function ImagePage() {
             onPromptChange={setImagePrompt}
             onImageCountChange={setImageCount}
             onSubmit={handleSubmit}
-            onRedeemTextChange={setRedeemText}
-            onRedeem={handleRedeem}
             onPickReferenceImage={() => fileInputRef.current?.click()}
             onReferenceImageChange={handleReferenceImageChange}
             onRemoveReferenceImage={handleRemoveReferenceImage}
