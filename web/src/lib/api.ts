@@ -122,6 +122,8 @@ export type SettingsConfig = {
   "auth-key"?: string;
   refresh_account_interval_minute?: number | string;
   image_bed_cleanup_days?: number | string;
+  register_user_allow_direct_mode?: boolean;
+  register_user_allow_image_bed_mode?: boolean;
   [key: string]: unknown;
 };
 

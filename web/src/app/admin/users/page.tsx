@@ -14,9 +14,12 @@ import {
   createAdminUser,
   deleteAdminUser,
   fetchAdminUsers,
+  fetchSettingsConfig,
   updateAdminUserImageModes,
   updateAdminUserQuota,
+  updateSettingsConfig,
   type AdminUser,
+  type SettingsConfig,
 } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { getStoredAuthSession } from "@/store/auth";
@@ -45,6 +48,11 @@ export default function AdminUsersPage() {
   const [quotaDrafts, setQuotaDrafts] = useState<Record<string, string>>({});
   const [modeDrafts, setModeDrafts] = useState<Record<string, { allow_direct_mode: boolean; allow_image_bed_mode: boolean }>>({});
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
+  const [registerDefaultModes, setRegisterDefaultModes] = useState({
+    allow_direct_mode: true,
+    allow_image_bed_mode: true,
+  });
+  const [isSavingRegisterDefaults, setIsSavingRegisterDefaults] = useState(false);
 
   const userCount = users.length;
   const totalQuota = useMemo(
@@ -57,16 +65,20 @@ export default function AdminUsersPage() {
       setIsLoading(true);
     }
     try {
-      const data = await fetchAdminUsers();
-      setUsers(data.items);
+      const [usersData, settingsData] = await Promise.all([fetchAdminUsers(), fetchSettingsConfig()]);
+      setUsers(usersData.items);
       setQuotaDrafts(
-        Object.fromEntries(data.items.map((item) => [item.id, formatQuota(item.quota)])),
+        Object.fromEntries(usersData.items.map((item) => [item.id, formatQuota(item.quota)])),
       );
       setModeDrafts(
         Object.fromEntries(
-          data.items.map((item) => [item.id, { allow_direct_mode: item.allow_direct_mode, allow_image_bed_mode: item.allow_image_bed_mode }]),
+          usersData.items.map((item) => [item.id, { allow_direct_mode: item.allow_direct_mode, allow_image_bed_mode: item.allow_image_bed_mode }]),
         ),
       );
+      setRegisterDefaultModes({
+        allow_direct_mode: settingsData.config.register_user_allow_direct_mode !== false,
+        allow_image_bed_mode: settingsData.config.register_user_allow_image_bed_mode !== false,
+      });
     } catch (error) {
       const message = error instanceof Error ? error.message : "加载用户失败";
       toast.error(message);
@@ -74,6 +86,29 @@ export default function AdminUsersPage() {
       if (!silent) {
         setIsLoading(false);
       }
+    }
+  };
+
+  const handleSaveRegisterDefaults = async () => {
+    if (!registerDefaultModes.allow_direct_mode && !registerDefaultModes.allow_image_bed_mode) {
+      toast.error("普通用户注册默认权限至少启用一种图片模式");
+      return;
+    }
+
+    setIsSavingRegisterDefaults(true);
+    try {
+      const nextConfig: SettingsConfig = {
+        ...(await fetchSettingsConfig()).config,
+        register_user_allow_direct_mode: registerDefaultModes.allow_direct_mode,
+        register_user_allow_image_bed_mode: registerDefaultModes.allow_image_bed_mode,
+      };
+      await updateSettingsConfig(nextConfig);
+      toast.success("普通用户注册默认图片模式已保存");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "保存普通用户注册默认权限失败";
+      toast.error(message);
+    } finally {
+      setIsSavingRegisterDefaults(false);
     }
   };
 
@@ -277,6 +312,57 @@ export default function AdminUsersPage() {
       </div>
 
       <div className="grid gap-4">
+        <Card className="rounded-2xl border-white/80 bg-white/90 shadow-sm">
+          <CardContent className="space-y-4 p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-semibold tracking-tight">普通用户注册默认图片模式</h2>
+                <p className="mt-1 text-sm text-stone-500">影响普通用户通过 /register 自助注册后默认拥有的直传 / 图床权限，不影响下方管理员手动创建用户。</p>
+              </div>
+              <Badge variant="secondary" className="rounded-md bg-stone-100 text-stone-700">
+                Register Default
+              </Badge>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="flex items-start gap-3 rounded-xl border border-stone-200 bg-white px-4 py-3 text-sm text-stone-700">
+                <Checkbox
+                  checked={registerDefaultModes.allow_direct_mode}
+                  onCheckedChange={(checked) =>
+                    setRegisterDefaultModes((prev) => ({
+                      ...prev,
+                      allow_direct_mode: Boolean(checked),
+                    }))
+                  }
+                />
+                <span>普通用户注册后默认允许直传模式</span>
+              </label>
+              <label className="flex items-start gap-3 rounded-xl border border-stone-200 bg-white px-4 py-3 text-sm text-stone-700">
+                <Checkbox
+                  checked={registerDefaultModes.allow_image_bed_mode}
+                  onCheckedChange={(checked) =>
+                    setRegisterDefaultModes((prev) => ({
+                      ...prev,
+                      allow_image_bed_mode: Boolean(checked),
+                    }))
+                  }
+                />
+                <span>普通用户注册后默认允许图床模式</span>
+              </label>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-xs text-stone-500">至少启用一种；两个都选表示新注册普通用户同时拥有直传与图床权限。</p>
+              <Button
+                variant="outline"
+                className="h-10 rounded-xl border-stone-200 bg-white px-4 text-stone-700"
+                onClick={() => void handleSaveRegisterDefaults()}
+                disabled={isSavingRegisterDefaults}
+              >
+                {isSavingRegisterDefaults ? <LoaderCircle className="size-4 animate-spin" /> : null}
+                保存注册默认权限
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
         <Card className="rounded-2xl border-white/80 bg-white/90 shadow-sm">
           <CardContent className="space-y-4 p-6">
             <div className="flex items-center justify-between">

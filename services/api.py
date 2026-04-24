@@ -303,6 +303,14 @@ def _ensure_at_least_one_user_image_mode(allow_direct_mode: bool, allow_image_be
     raise HTTPException(status_code=400, detail={"error": "at least one image mode must be enabled"})
 
 
+def _get_register_user_image_mode_defaults() -> tuple[bool, bool]:
+    allow_direct_mode = bool(config.data.get("register_user_allow_direct_mode", True))
+    allow_image_bed_mode = bool(config.data.get("register_user_allow_image_bed_mode", True))
+    if not allow_direct_mode and not allow_image_bed_mode:
+        return True, False
+    return allow_direct_mode, allow_image_bed_mode
+
+
 def _ensure_user_quota_or_raise(context: AuthContext, required: int) -> dict[str, object] | None:
     if context.is_admin:
         return None
@@ -555,8 +563,15 @@ def create_app() -> FastAPI:
 
     @router.post("/auth/register")
     async def register(body: LocalRegisterRequest):
+        allow_direct_mode, allow_image_bed_mode = _get_register_user_image_mode_defaults()
         try:
-            user = user_service.register_user(body.username, body.password, quota=0)
+            user = user_service.register_user(
+                body.username,
+                body.password,
+                quota=0,
+                allow_direct_mode=allow_direct_mode,
+                allow_image_bed_mode=allow_image_bed_mode,
+            )
         except ValueError as exc:
             message = str(exc)
             status = 409 if "already exists" in message else 400
