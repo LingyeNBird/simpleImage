@@ -7,6 +7,8 @@ services:
     restart: unless-stopped
     ports:
       - "3000:80"
+    environment:
+      CHATGPT2API_CONFIG_FILE: /app/data/config.json
+      CHATGPT2API_COS_CONFIG_FILE: /app/data/cos_config.json
     volumes:
       - ./data:/app/data
-      - ./config.json:/app/config.json:ro

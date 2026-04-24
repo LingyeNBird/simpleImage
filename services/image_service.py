@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
+from curl_cffi.const import CurlHttpVersion
 from curl_cffi.requests import Session
 
 from services.account_service import account_service
@@ -105,10 +106,11 @@ def _build_fp(access_token: str) -> dict:
     return fp
 
 
-def _new_session(access_token: str) -> tuple[Session, dict]:
+def _new_session_with_http_version(access_token: str, http_version: CurlHttpVersion = CurlHttpVersion.V2TLS) -> tuple[Session, dict]:
     fp = _build_fp(access_token)
     session = Session(**proxy_settings.build_session_kwargs(
         impersonate=fp.get("impersonate") or "edge101",
+        http_version=http_version,
         verify=True,
     ))
     session.headers.update(
@@ -128,6 +130,12 @@ def _new_session(access_token: str) -> tuple[Session, dict]:
         }
     )
     return session, fp
+
+
+def _is_http2_stream_error(exc: Exception) -> bool:
+    message = str(exc or "")
+    normalized_message = message.lower()
+    return "http/2 stream" in normalized_message or "curl: (92)" in normalized_message
 
 
 def _retry(fn, retries: int = 4, delay: float = 2.0, retry_on_status: tuple[int, ...] = ()) -> object:
@@ -721,61 +729,67 @@ def generate_image_result(
     if not access_token:
         raise ImageGenerationError("token is required")
 
-    session, fp = _new_session(access_token)
-    try:
-        upstream_model = _resolve_upstream_model(access_token, model)
-        print(
-            f"[image-upstream] start token={access_token[:12]}... "
-            f"requested_model={model} upstream_model={upstream_model}"
-        )
-        device_id = _bootstrap(session, fp)
-        chat_token, pow_info = _chat_requirements(session, access_token, device_id)
-        proof_token = None
-        if pow_info.get("required"):
-            proof_token = _generate_proof_token(
-                seed=str(pow_info["seed"]),
-                difficulty=str(pow_info["difficulty"]),
-                user_agent=USER_AGENT,
-                proof_config=_pow_config(USER_AGENT),
+    http_versions = [CurlHttpVersion.V2TLS, CurlHttpVersion.V1_1]
+    for attempt_index, http_version in enumerate(http_versions, start=1):
+        session, fp = _new_session_with_http_version(access_token, http_version=http_version)
+        try:
+            upstream_model = _resolve_upstream_model(access_token, model)
+            print(
+                f"[image-upstream] start token={access_token[:12]}... "
+                f"requested_model={model} upstream_model={upstream_model} http_version={http_version.name} attempt={attempt_index}/{len(http_versions)}"
             )
-        parent_message_id = str(uuid.uuid4())
-        response = _send_conversation(
-            session,
-            access_token,
-            device_id,
-            chat_token,
-            proof_token,
-            parent_message_id,
-            prompt,
-            upstream_model,
-        )
-        parsed = _parse_sse(response)
-        actual_conversation_id = parsed.get("conversation_id") or ""
-        file_ids = parsed.get("file_ids") or []
-        response_text = str(parsed.get("text") or "").strip()
-        if actual_conversation_id and not file_ids:
-            file_ids = _poll_image_ids(session, access_token, device_id, actual_conversation_id)
-        if not file_ids:
-            if response_text:
-                raise ImageGenerationError(response_text)
-            raise ImageGenerationError("no image returned from upstream")
-        first_file_id = str(file_ids[0])
-        download_url = _fetch_download_url(session, access_token, device_id, actual_conversation_id, first_file_id)
-        if not download_url:
-            raise ImageGenerationError("failed to get download url")
+            device_id = _bootstrap(session, fp)
+            chat_token, pow_info = _chat_requirements(session, access_token, device_id)
+            proof_token = None
+            if pow_info.get("required"):
+                proof_token = _generate_proof_token(
+                    seed=str(pow_info["seed"]),
+                    difficulty=str(pow_info["difficulty"]),
+                    user_agent=USER_AGENT,
+                    proof_config=_pow_config(USER_AGENT),
+                )
+            parent_message_id = str(uuid.uuid4())
+            response = _send_conversation(
+                session,
+                access_token,
+                device_id,
+                chat_token,
+                proof_token,
+                parent_message_id,
+                prompt,
+                upstream_model,
+            )
+            parsed = _parse_sse(response)
+            actual_conversation_id = parsed.get("conversation_id") or ""
+            file_ids = parsed.get("file_ids") or []
+            response_text = str(parsed.get("text") or "").strip()
+            if actual_conversation_id and not file_ids:
+                file_ids = _poll_image_ids(session, access_token, device_id, actual_conversation_id)
+            if not file_ids:
+                if response_text:
+                    raise ImageGenerationError(response_text)
+                raise ImageGenerationError("no image returned from upstream")
+            first_file_id = str(file_ids[0])
+            download_url = _fetch_download_url(session, access_token, device_id, actual_conversation_id, first_file_id)
+            if not download_url:
+                raise ImageGenerationError("failed to get download url")
 
-        result_data = _build_result_data(session, download_url, prompt, response_format, base_url, delivery_mode)
+            result_data = _build_result_data(session, download_url, prompt, response_format, base_url, delivery_mode)
 
-        print(f"[image-upstream] success token={access_token[:12]}... images=1 format={response_format}")
-        return {
-            "created": time.time_ns() // 1_000_000_000,
-            "data": [result_data],
-        }
-    except Exception as exc:
-        print(f"[image-upstream] fail token={access_token[:12]}... error={exc}")
-        raise
-    finally:
-        session.close()
+            print(f"[image-upstream] success token={access_token[:12]}... images=1 format={response_format}")
+            return {
+                "created": time.time_ns() // 1_000_000_000,
+                "data": [result_data],
+            }
+        except Exception as exc:
+            print(f"[image-upstream] fail token={access_token[:12]}... error={exc}")
+            should_retry_with_http1 = attempt_index == 1 and _is_http2_stream_error(exc)
+            if not should_retry_with_http1:
+                raise
+            print(f"[image-upstream] retry token={access_token[:12]}... downgrade_http=V1_1")
+        finally:
+            session.close()
+    raise ImageGenerationError("image generation failed")
 
 
 def _get_image_dimensions(image_data: bytes) -> tuple[int, int]:
@@ -831,83 +845,89 @@ def edit_image_result(
     if not images:
         raise ImageGenerationError("image is required")
 
-    session, fp = _new_session(access_token)
-    try:
-        upstream_model = _resolve_upstream_model(access_token, model)
-        print(
-            f"[image-edit-upstream] start token={access_token[:12]}... "
-            f"requested_model={model} upstream_model={upstream_model} images={len(images)}"
-        )
-        device_id = _bootstrap(session, fp)
+    http_versions = [CurlHttpVersion.V2TLS, CurlHttpVersion.V1_1]
+    for attempt_index, http_version in enumerate(http_versions, start=1):
+        session, fp = _new_session_with_http_version(access_token, http_version=http_version)
+        try:
+            upstream_model = _resolve_upstream_model(access_token, model)
+            print(
+                f"[image-edit-upstream] start token={access_token[:12]}... "
+                f"requested_model={model} upstream_model={upstream_model} images={len(images)} http_version={http_version.name} attempt={attempt_index}/{len(http_versions)}"
+            )
+            device_id = _bootstrap(session, fp)
 
-        uploaded_images: list[EditInputImage] = []
-        for image_data, file_name, mime_type in images:
-            if not image_data:
-                raise ImageGenerationError("image is required")
+            uploaded_images: list[EditInputImage] = []
+            for image_data, file_name, mime_type in images:
+                if not image_data:
+                    raise ImageGenerationError("image is required")
 
-            file_id = _upload_image(session, access_token, device_id, image_data, file_name, mime_type)
-            print(f"[image-edit-upstream] uploaded file_id={file_id}")
-            image_width, image_height = _get_image_dimensions(image_data)
-            uploaded_images.append(
-                EditInputImage(
-                    file_id=file_id,
-                    data=image_data,
-                    file_name=file_name,
-                    mime_type=mime_type,
-                    width=image_width,
-                    height=image_height,
+                file_id = _upload_image(session, access_token, device_id, image_data, file_name, mime_type)
+                print(f"[image-edit-upstream] uploaded file_id={file_id}")
+                image_width, image_height = _get_image_dimensions(image_data)
+                uploaded_images.append(
+                    EditInputImage(
+                        file_id=file_id,
+                        data=image_data,
+                        file_name=file_name,
+                        mime_type=mime_type,
+                        width=image_width,
+                        height=image_height,
+                    )
                 )
-            )
 
-        chat_token, pow_info = _chat_requirements(session, access_token, device_id)
-        proof_token = None
-        if pow_info.get("required"):
-            proof_token = _generate_proof_token(
-                seed=str(pow_info["seed"]),
-                difficulty=str(pow_info["difficulty"]),
-                user_agent=USER_AGENT,
-                proof_config=_pow_config(USER_AGENT),
+            chat_token, pow_info = _chat_requirements(session, access_token, device_id)
+            proof_token = None
+            if pow_info.get("required"):
+                proof_token = _generate_proof_token(
+                    seed=str(pow_info["seed"]),
+                    difficulty=str(pow_info["difficulty"]),
+                    user_agent=USER_AGENT,
+                    proof_config=_pow_config(USER_AGENT),
+                )
+            parent_message_id = str(uuid.uuid4())
+            response = _send_edit_conversation(
+                session,
+                access_token,
+                device_id,
+                chat_token,
+                proof_token,
+                parent_message_id,
+                prompt,
+                upstream_model,
+                uploaded_images,
             )
-        parent_message_id = str(uuid.uuid4())
-        response = _send_edit_conversation(
-            session,
-            access_token,
-            device_id,
-            chat_token,
-            proof_token,
-            parent_message_id,
-            prompt,
-            upstream_model,
-            uploaded_images,
-        )
-        parsed = _parse_sse(response)
-        actual_conversation_id = parsed.get("conversation_id") or ""
-        input_file_ids = {image.file_id for image in uploaded_images}
-        file_ids = _filter_output_file_ids(parsed.get("file_ids") or [], input_file_ids)
-        response_text = str(parsed.get("text") or "").strip()
-        if actual_conversation_id and not file_ids:
-            file_ids = _filter_output_file_ids(
-                _poll_image_ids(session, access_token, device_id, actual_conversation_id),
-                input_file_ids,
-            )
-        if not file_ids:
-            if response_text:
-                raise ImageGenerationError(response_text)
-            raise ImageGenerationError("no image returned from upstream")
-        first_file_id = str(file_ids[0])
-        download_url = _fetch_download_url(session, access_token, device_id, actual_conversation_id, first_file_id)
-        if not download_url:
-            raise ImageGenerationError("failed to get download url")
+            parsed = _parse_sse(response)
+            actual_conversation_id = parsed.get("conversation_id") or ""
+            input_file_ids = {image.file_id for image in uploaded_images}
+            file_ids = _filter_output_file_ids(parsed.get("file_ids") or [], input_file_ids)
+            response_text = str(parsed.get("text") or "").strip()
+            if actual_conversation_id and not file_ids:
+                file_ids = _filter_output_file_ids(
+                    _poll_image_ids(session, access_token, device_id, actual_conversation_id),
+                    input_file_ids,
+                )
+            if not file_ids:
+                if response_text:
+                    raise ImageGenerationError(response_text)
+                raise ImageGenerationError("no image returned from upstream")
+            first_file_id = str(file_ids[0])
+            download_url = _fetch_download_url(session, access_token, device_id, actual_conversation_id, first_file_id)
+            if not download_url:
+                raise ImageGenerationError("failed to get download url")
 
-        result_data = _build_result_data(session, download_url, prompt, response_format, base_url, delivery_mode)
+            result_data = _build_result_data(session, download_url, prompt, response_format, base_url, delivery_mode)
 
-        print(f"[image-edit-upstream] success token={access_token[:12]}... inputs={len(uploaded_images)} format={response_format}")
-        return {
-            "created": time.time_ns() // 1_000_000_000,
-            "data": [result_data],
-        }
-    except Exception as exc:
-        print(f"[image-edit-upstream] fail token={access_token[:12]}... error={exc}")
-        raise
-    finally:
-        session.close()
+            print(f"[image-edit-upstream] success token={access_token[:12]}... inputs={len(uploaded_images)} format={response_format}")
+            return {
+                "created": time.time_ns() // 1_000_000_000,
+                "data": [result_data],
+            }
+        except Exception as exc:
+            print(f"[image-edit-upstream] fail token={access_token[:12]}... error={exc}")
+            should_retry_with_http1 = attempt_index == 1 and _is_http2_stream_error(exc)
+            if not should_retry_with_http1:
+                raise
+            print(f"[image-edit-upstream] retry token={access_token[:12]}... downgrade_http=V1_1")
+        finally:
+            session.close()
+    raise ImageGenerationError("image edit failed")

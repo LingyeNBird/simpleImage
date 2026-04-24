@@ -2,12 +2,20 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import json
+import os
 from pathlib import Path
 
 from services.config import BASE_DIR
 
 
-COS_CONFIG_FILE = BASE_DIR / "cos_config.json"
+def _resolve_cos_config_file() -> Path:
+    configured_path = str(os.getenv("CHATGPT2API_COS_CONFIG_FILE") or "").strip()
+    if configured_path:
+        return Path(configured_path)
+    return BASE_DIR / "cos_config.json"
+
+
+COS_CONFIG_FILE = _resolve_cos_config_file()
 
 
 @dataclass(frozen=True)
@@ -57,5 +65,6 @@ def save_cos_config(data: dict[str, object]) -> CosConfigData:
     )
     if not cos_config.region or not cos_config.secret_id or not cos_config.secret_key or not cos_config.bucket:
         raise ValueError("Region、SecretId、SecretKey、Bucket 均为必填")
+    _ = COS_CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
     COS_CONFIG_FILE.write_text(json.dumps(cos_config.to_dict(), ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     return cos_config

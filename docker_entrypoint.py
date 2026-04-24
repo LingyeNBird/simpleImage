@@ -3,13 +3,18 @@ from __future__ import annotations
 import json
 import os
 import signal
+import shutil
 import subprocess
 import time
 from pathlib import Path
 from typing import cast
 
 BASE_DIR = Path(__file__).resolve().parent
-CONFIG_FILE = BASE_DIR / "config.json"
+DATA_DIR = BASE_DIR / "data"
+DEFAULT_CONFIG_FILE = BASE_DIR / "config.json"
+DEFAULT_COS_CONFIG_FILE = BASE_DIR / "cos_config.json"
+CONFIG_FILE = Path(os.getenv("CHATGPT2API_CONFIG_FILE") or (DATA_DIR / "config.json"))
+COS_CONFIG_FILE = Path(os.getenv("CHATGPT2API_COS_CONFIG_FILE") or (DATA_DIR / "cos_config.json"))
 WEB_DIR = BASE_DIR / "web"
 NEXT_BIN = WEB_DIR / "node_modules" / ".bin" / "next"
 VERSION_FILE = BASE_DIR / "VERSION"
@@ -29,6 +34,14 @@ def _read_json_object(path: Path) -> dict[str, object]:
             normalized[str(key)] = value
         return normalized
     return {}
+
+
+def _ensure_runtime_file(target: Path, fallback: Path) -> None:
+    if target.exists() or target.is_dir():
+        return
+    _ = target.parent.mkdir(parents=True, exist_ok=True)
+    if fallback.is_file():
+        shutil.copyfile(fallback, target)
 
 
 def _coerce_bool(value: object, default: bool = False) -> bool:
@@ -115,6 +128,8 @@ def _run_development() -> None:
 
 
 def main() -> None:
+    _ensure_runtime_file(CONFIG_FILE, DEFAULT_CONFIG_FILE)
+    _ensure_runtime_file(COS_CONFIG_FILE, DEFAULT_COS_CONFIG_FILE)
     raw_config = _read_json_object(CONFIG_FILE)
     if _coerce_bool(raw_config.get("next_dev"), False):
         _run_development()

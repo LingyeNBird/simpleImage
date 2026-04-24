@@ -28,6 +28,13 @@ git clone git@github.com:basketikun/chatgpt2api.git
 docker compose up -d
 ```
 
+Docker Compose 默认会把运行时配置持久化到 `./data/`：
+
+- `./data/config.json`
+- `./data/cos_config.json`
+
+首次启动时，如果 `./data/config.json` 不存在，会自动从仓库根目录的 `config.json` 复制一份作为运行时配置。之后在网页里修改设置或存储桶信息，都会直接写回 `./data/` 下的持久化文件。
+
 ## 功能
 
 ### API 兼容能力

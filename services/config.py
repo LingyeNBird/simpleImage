@@ -8,7 +8,16 @@ from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parents[1]
 DATA_DIR = BASE_DIR / "data"
-CONFIG_FILE = BASE_DIR / "config.json"
+
+
+def _resolve_config_file() -> Path:
+    configured_path = str(os.getenv("CHATGPT2API_CONFIG_FILE") or "").strip()
+    if configured_path:
+        return Path(configured_path)
+    return BASE_DIR / "config.json"
+
+
+CONFIG_FILE = _resolve_config_file()
 
 
 def _coerce_int(value: object, default: int) -> int:
@@ -53,7 +62,7 @@ def _read_json_object(path: Path, *, name: str) -> dict[str, object]:
 
 
 def _load_settings() -> LoadedSettings:
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    _ = DATA_DIR.mkdir(parents=True, exist_ok=True)
     raw_config = _read_json_object(CONFIG_FILE, name="config.json")
     auth_key = str(os.getenv("CHATGPT2API_AUTH_KEY") or raw_config.get("auth-key") or "").strip()
     if not auth_key:
@@ -75,7 +84,7 @@ def _load_settings() -> LoadedSettings:
 class ConfigStore:
     def __init__(self, path: Path):
         self.path = path
-        DATA_DIR.mkdir(parents=True, exist_ok=True)
+        _ = DATA_DIR.mkdir(parents=True, exist_ok=True)
         self.data = self._load()
         if not self.auth_key:
             raise ValueError(
