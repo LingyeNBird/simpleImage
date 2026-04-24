@@ -1103,6 +1103,7 @@ export default function ImagePage() {
             imageCount={imageCount}
             deliveryMode={deliveryMode}
             availableDeliveryModes={availableDeliveryModes}
+            showAllDeliveryModes={currentIdentity?.role === "admin"}
             activeTaskCount={activeTaskCount}
             referenceImages={referenceImages}
             textareaRef={textareaRef}

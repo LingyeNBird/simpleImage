@@ -17,6 +17,7 @@ type ImageComposerProps = {
   imageCount: string;
   deliveryMode: ImageDeliveryMode;
   availableDeliveryModes: ImageDeliveryMode[];
+  showAllDeliveryModes?: boolean;
   activeTaskCount: number;
   referenceImages: Array<{ name: string; dataUrl: string }>;
   textareaRef: RefObject<HTMLTextAreaElement | null>;
@@ -37,6 +38,7 @@ export function ImageComposer({
   imageCount,
   deliveryMode,
   availableDeliveryModes,
+  showAllDeliveryModes = false,
   activeTaskCount,
   referenceImages,
   textareaRef,
@@ -52,6 +54,11 @@ export function ImageComposer({
 }: ImageComposerProps) {
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState(0);
+  const visibleDeliveryModes = useMemo<ImageDeliveryMode[]>(
+    () => (showAllDeliveryModes ? ["direct", "image_bed"] : availableDeliveryModes),
+    [availableDeliveryModes, showAllDeliveryModes],
+  );
+  const imageBedAvailable = availableDeliveryModes.includes("image_bed");
   const lightboxImages = useMemo(
     () => referenceImages.map((image, index) => ({ id: `${image.name}-${index}`, src: image.dataUrl })),
     [referenceImages],
@@ -181,26 +188,35 @@ export function ImageComposer({
                       className="h-8 w-[64px] border-0 bg-transparent px-0 text-center text-sm font-medium text-stone-700 shadow-none focus-visible:ring-0"
                     />
                   </div>
-                  {availableDeliveryModes.length > 1 ? (
+                  {visibleDeliveryModes.length > 1 ? (
                     <div className="flex flex-col gap-1">
                       <div className="flex items-center gap-2">
-                        <ModeButton
-                          active={deliveryMode === "direct"}
-                          onClick={() => onDeliveryModeChange("direct")}
-                          title="直接传输图片，耗时较久"
-                        >
-                          直传
-                        </ModeButton>
-                        <ModeButton
-                          active={deliveryMode === "image_bed"}
-                          onClick={() => onDeliveryModeChange("image_bed")}
-                          title="使用图床，避免出现连接问题"
-                        >
-                          图床
-                        </ModeButton>
+                        {visibleDeliveryModes.includes("direct") ? (
+                          <ModeButton
+                            active={deliveryMode === "direct"}
+                            onClick={() => onDeliveryModeChange("direct")}
+                            title="直接传输图片，耗时较久"
+                          >
+                            直传
+                          </ModeButton>
+                        ) : null}
+                        {visibleDeliveryModes.includes("image_bed") ? (
+                          <ModeButton
+                            active={deliveryMode === "image_bed"}
+                            disabled={!imageBedAvailable}
+                            onClick={() => onDeliveryModeChange("image_bed")}
+                            title={imageBedAvailable ? "使用图床，避免出现连接问题" : "请先在存储桶管理中配置可用图床"}
+                          >
+                            图床
+                          </ModeButton>
+                        ) : null}
                       </div>
                       <div className="px-1 text-xs text-stone-500">
-                        {deliveryMode === "image_bed" ? "使用图床，避免出现连接问题" : "直接传输图片，耗时较久"}
+                        {deliveryMode === "image_bed"
+                          ? "使用图床，避免出现连接问题"
+                          : showAllDeliveryModes && !imageBedAvailable
+                            ? "图床模式暂未就绪，请先在存储桶管理中完成 COS 配置"
+                            : "直接传输图片，耗时较久"}
                       </div>
                     </div>
                   ) : null}
@@ -236,21 +252,32 @@ function ModeButton({
   active,
   children,
   onClick,
+  disabled,
   title,
 }: {
   active: boolean;
   children: string;
   onClick: () => void;
+  disabled?: boolean;
   title?: string;
 }) {
   return (
     <button
       type="button"
-      onClick={onClick}
+      onClick={() => {
+        if (!disabled) {
+          onClick();
+        }
+      }}
+      disabled={disabled}
       title={title}
       className={cn(
         "rounded-full px-4 py-2 text-sm font-medium transition",
-        active ? "bg-stone-950 text-white" : "bg-stone-100 text-stone-600 hover:bg-stone-200",
+        active
+          ? "bg-stone-950 text-white"
+          : disabled
+            ? "cursor-not-allowed bg-stone-100 text-stone-400"
+            : "bg-stone-100 text-stone-600 hover:bg-stone-200",
       )}
     >
       {children}
