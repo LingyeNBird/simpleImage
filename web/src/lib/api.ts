@@ -46,7 +46,7 @@ export type ImageJob = {
   created_at: string;
   updated_at: string;
   error?: string | null;
-  result_images: Array<{ id: string; url: string; storage: "image_bed" }>;
+  result_images: Array<{ id: string; url: string; storage: "image_bed"; object_key?: string; url_expires_at?: string }>;
   reference_images: Array<{ name: string; type: string }>;
 };
 
@@ -304,7 +304,7 @@ export async function updateAccount(
 }
 
 export async function generateImage(prompt: string, model?: ImageModel, deliveryMode: ImageDeliveryMode = "direct") {
-  return httpRequest<{ created: number; data: Array<{ b64_json?: string; url?: string; revised_prompt?: string; storage?: string }> }>(
+  return httpRequest<{ created: number; data: Array<{ b64_json?: string; url?: string; object_key?: string; url_expires_at?: string; revised_prompt?: string; storage?: string }> }>(
     "/v1/images/generations",
     {
       method: "POST",
@@ -338,7 +338,7 @@ export async function editImage(
   formData.append("n", "1");
   formData.append("delivery_mode", deliveryMode);
 
-  return httpRequest<{ created: number; data: Array<{ b64_json?: string; url?: string; revised_prompt?: string; storage?: string }> }>(
+  return httpRequest<{ created: number; data: Array<{ b64_json?: string; url?: string; object_key?: string; url_expires_at?: string; revised_prompt?: string; storage?: string }> }>(
     "/v1/images/edits",
     {
       method: "POST",

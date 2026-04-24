@@ -40,13 +40,21 @@ def _normalize_result_image(raw: object) -> dict[str, object] | None:
     if not isinstance(raw, dict):
         return None
     image_url = str(raw.get("url") or "").strip()
-    if not image_url:
+    object_key = str(raw.get("object_key") or "").strip()
+    url_expires_at = str(raw.get("url_expires_at") or "").strip()
+    if not image_url and not object_key:
         return None
-    return {
+    normalized: dict[str, object] = {
         "id": str(raw.get("id") or uuid.uuid4().hex).strip() or uuid.uuid4().hex,
-        "url": image_url,
         "storage": "image_bed",
     }
+    if image_url:
+        normalized["url"] = image_url
+    if object_key:
+        normalized["object_key"] = object_key
+    if url_expires_at:
+        normalized["url_expires_at"] = url_expires_at
+    return normalized
 
 
 def _normalize_reference_input(raw: object) -> dict[str, object] | None:

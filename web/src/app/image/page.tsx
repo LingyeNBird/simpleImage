@@ -172,7 +172,13 @@ function buildConversationFromImageJob(job: ImageJob): ImageConversation {
         count: job.count,
         images:
           job.status === "success"
-            ? job.result_images.map((image) => ({ id: image.id, status: "success" as const, url: image.url, storage: "image_bed" as const }))
+            ? job.result_images.map((image) => ({
+                id: image.id,
+                status: "success" as const,
+                url: image.url,
+                urlExpiresAt: image.url_expires_at,
+                storage: "image_bed" as const,
+              }))
             : Array.from({ length: job.count }, (_, index) => ({
                 id: `${turnId}-${index}`,
                 status: job.status === "error" ? ("error" as const) : ("loading" as const),
@@ -752,6 +758,7 @@ export default function ImagePage() {
               status: "success",
               b64_json: first.b64_json,
               url: first.url,
+              urlExpiresAt: first.url_expires_at,
               storage: first.storage === "image_bed" ? "image_bed" : "direct",
             };
 

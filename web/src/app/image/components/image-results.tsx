@@ -1,6 +1,7 @@
 "use client";
 
 import { Clock3, LoaderCircle, Sparkles } from "lucide-react";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import type { ImageConversation, ImageTurnStatus, StoredImage, StoredReferenceImage } from "@/store/image-conversations";
@@ -23,6 +24,33 @@ export function ImageResults({
   onContinueEdit,
   formatConversationTime,
 }: ImageResultsProps) {
+  const copyImageUrl = async (url: string) => {
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.success("已复制临时图床链接");
+    } catch {
+      toast.error("复制链接失败");
+    }
+  };
+
+  const formatUrlExpireText = (value?: string) => {
+    const text = String(value || "").trim();
+    if (!text) {
+      return "URL 将在图床清理时效到期后失效，请尽快下载";
+    }
+    const date = new Date(text);
+    if (Number.isNaN(date.getTime())) {
+      return "URL 将在图床清理时效到期后失效，请尽快下载";
+    }
+    return `URL 将在 ${new Intl.DateTimeFormat("zh-CN", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    }).format(date)} 后失效，请尽快下载`;
+  };
+
   if (!selectedConversation) {
     return (
       <div className="flex h-full min-h-[420px] items-center justify-center text-center">
@@ -157,14 +185,29 @@ export function ImageResults({
                               </Button>
                             </div>
                             {image.url ? (
-                              <a
-                                href={image.url}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="break-all text-xs leading-5 text-sky-600 underline underline-offset-2"
-                              >
-                                {image.url}
-                              </a>
+                              <>
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <a
+                                    href={image.url}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="text-xs leading-5 text-sky-600 underline underline-offset-2"
+                                  >
+                                    打开临时图床链接
+                                  </a>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="rounded-full border-stone-200 bg-white text-stone-700 hover:bg-stone-50"
+                                    onClick={() => void copyImageUrl(image.url || "")}
+                                  >
+                                    复制链接
+                                  </Button>
+                                </div>
+                                <div className="text-xs leading-5 text-amber-600">
+                                  {formatUrlExpireText(image.urlExpiresAt)}
+                                </div>
+                              </>
                             ) : null}
                           </div>
                         </div>

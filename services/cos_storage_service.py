@@ -60,6 +60,38 @@ def build_public_url(object_key: str) -> str:
     return f"{cos_config.public_base_url}/{object_key}"
 
 
+def get_image_url_expire_seconds() -> int:
+    cleanup_days = max(1, _safe_int(config.data.get("image_bed_cleanup_days"), 3))
+    return max(60, cleanup_days * 24 * 60 * 60)
+
+
+def get_image_url_expires_at_iso(expire_seconds: int | None = None) -> str:
+    seconds = max(60, int(expire_seconds or get_image_url_expire_seconds()))
+    return (datetime.now(UTC) + timedelta(seconds=seconds)).isoformat()
+
+
+def is_project_image_object_key(object_key: str) -> bool:
+    normalized_key = str(object_key or "").strip().lstrip("/")
+    return normalized_key.startswith(f"{PROJECT_IMAGE_PREFIX}/")
+
+
+def build_signed_download_url(object_key: str, expire_seconds: int | None = None) -> str:
+    client, bucket = _build_client()
+    normalized_key = str(object_key or "").strip()
+    if not normalized_key:
+        raise CosStorageError("object key is required")
+    if not is_project_image_object_key(normalized_key):
+        raise CosStorageError("object key is outside project image prefix")
+    return str(
+        client.get_presigned_download_url(
+            Bucket=bucket,
+            Key=normalized_key,
+            Expired=max(60, int(expire_seconds or get_image_url_expire_seconds())),
+        )
+        or ""
+    ).strip()
+
+
 def build_object_key(local_file: Path) -> str:
     relative_parts = local_file.relative_to(config.images_dir).parts
     encoded_relative_path = "/".join(quote(part, safe="-_.~/") for part in relative_parts)
@@ -159,4 +191,4 @@ def upload_file_and_verify(local_file: Path, mime_type: str = "image/png") -> st
         client.put_object(Bucket=bucket, Body=file_obj, Key=object_key, ContentType=mime_type)
     client.head_object(Bucket=bucket, Key=object_key)
     cleanup_expired_images()
-    return build_public_url(object_key)
+    return object_key

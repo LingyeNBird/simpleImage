@@ -16,7 +16,7 @@ from curl_cffi.requests import Session
 from services.account_service import account_service
 from services import proof_of_work
 from services.config import config
-from services.cos_storage_service import upload_file_and_verify
+from services.cos_storage_service import build_signed_download_url, get_image_url_expires_at_iso, upload_file_and_verify
 from services.proxy_service import proxy_settings
 
 
@@ -676,7 +676,9 @@ def _build_result_data(
     if normalized_delivery_mode == "image_bed":
         saved_file = _save_downloaded_image(session, download_url)
         try:
-            image_url = upload_file_and_verify(saved_file.path, saved_file.mime_type)
+            object_key = upload_file_and_verify(saved_file.path, saved_file.mime_type)
+            image_url = build_signed_download_url(object_key)
+            image_url_expires_at = get_image_url_expires_at_iso()
         except Exception as exc:
             raise ImageGenerationError(f"upload image to cos failed: {exc}") from exc
         try:
@@ -685,6 +687,8 @@ def _build_result_data(
             pass
         return {
             "url": image_url,
+            "object_key": object_key,
+            "url_expires_at": image_url_expires_at,
             "revised_prompt": prompt,
             "storage": "image_bed",
         }

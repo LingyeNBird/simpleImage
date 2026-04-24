@@ -17,6 +17,7 @@ export type StoredImage = {
   status?: "loading" | "success" | "error";
   b64_json?: string;
   url?: string;
+  urlExpiresAt?: string;
   storage?: "direct" | "image_bed";
   error?: string;
 };

@@ -17,7 +17,7 @@ from services.auth_service import AuthContext, auth_service
 from services.chatgpt_service import ChatGPTService
 from services.config import config
 from services.cos_config import load_cos_config, save_cos_config
-from services.cos_storage_service import is_cos_storage_ready
+from services.cos_storage_service import build_signed_download_url, get_image_url_expires_at_iso, is_cos_storage_ready, is_project_image_object_key
 from services.cos_storage_service import count_project_images, test_connection as test_cos_connection
 from services.cpa_service import cpa_config, cpa_import_service, list_remote_files
 from services.user_service import user_service
@@ -380,6 +380,35 @@ def resolve_web_asset(requested_path: str) -> Path | None:
 def _sanitize_image_job(job: Mapping[str, object]) -> dict[str, object]:
     result_images = job.get("result_images")
     reference_images = job.get("reference_images")
+    sanitized_result_images = []
+    if isinstance(result_images, list):
+        for item in result_images:
+            if not isinstance(item, dict):
+                continue
+            object_key = str(item.get("object_key") or "").strip()
+            image_url = str(item.get("url") or "").strip()
+            if object_key:
+                if not is_project_image_object_key(object_key):
+                    continue
+                try:
+                    image_url = build_signed_download_url(object_key)
+                    url_expires_at = get_image_url_expires_at_iso()
+                except Exception:
+                    url_expires_at = str(item.get("url_expires_at") or "").strip()
+            else:
+                url_expires_at = str(item.get("url_expires_at") or "").strip()
+            if not image_url:
+                continue
+            sanitized_item = {
+                "id": str(item.get("id") or "").strip(),
+                "url": image_url,
+                "storage": "image_bed",
+            }
+            if object_key:
+                sanitized_item["object_key"] = object_key
+            if url_expires_at:
+                sanitized_item["url_expires_at"] = url_expires_at
+            sanitized_result_images.append(sanitized_item)
     return {
         "id": str(job.get("id") or "").strip(),
         "conversation_id": str(job.get("conversation_id") or "").strip(),
@@ -393,7 +422,7 @@ def _sanitize_image_job(job: Mapping[str, object]) -> dict[str, object]:
         "created_at": str(job.get("created_at") or "").strip(),
         "updated_at": str(job.get("updated_at") or "").strip(),
         "error": str(job.get("error") or "").strip() or None,
-        "result_images": [dict(item) for item in result_images] if isinstance(result_images, list) else [],
+        "result_images": sanitized_result_images,
         "reference_images": [
             {"name": str(item.get("name") or "").strip(), "type": str(item.get("type") or "image/png").strip() or "image/png"}
             for item in reference_images
@@ -452,10 +481,18 @@ def create_app() -> FastAPI:
                 for index, item in enumerate(data, start=1):
                     if not isinstance(item, dict):
                         continue
+                    object_key = str(item.get("object_key") or "").strip()
                     image_url = str(item.get("url") or "").strip()
-                    if not image_url:
+                    if not object_key and not image_url:
                         continue
-                    result_images.append({"id": f"{job_id}-{index}", "url": image_url, "storage": "image_bed"})
+                    result_item = {"id": f"{job_id}-{index}", "storage": "image_bed"}
+                    if object_key:
+                        result_item["object_key"] = object_key
+                    if image_url:
+                        result_item["url"] = image_url
+                    if object_key:
+                        result_item["url_expires_at"] = get_image_url_expires_at_iso()
+                    result_images.append(result_item)
             if not result_images:
                 raise RuntimeError("未返回图床图片")
             owner_role = str(job.get("owner_role") or "user").strip() or "user"
