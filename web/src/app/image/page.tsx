@@ -331,6 +331,15 @@ export default function ImagePage() {
       }, 0),
     [conversations],
   );
+  const hasPendingBackendJobs = useMemo(
+    () =>
+      conversations.some((conversation) =>
+        conversation.turns.some(
+          (turn) => Boolean(turn.backendJobId) && (turn.status === "queued" || turn.status === "generating"),
+        ),
+      ),
+    [conversations],
+  );
   const availableDeliveryModes = useMemo<ImageDeliveryMode[]>(() => {
     const modes = currentIdentity?.image_delivery_modes;
     return modes && modes.length > 0 ? modes : ["direct"];
@@ -437,12 +446,15 @@ export default function ImagePage() {
     if (!guardReady) {
       return;
     }
-    void syncImageJobs();
+    if (!hasPendingBackendJobs) {
+      return;
+    }
+
     const timer = window.setInterval(() => {
       void syncImageJobs();
     }, 4000);
     return () => window.clearInterval(timer);
-  }, [guardReady, syncImageJobs]);
+  }, [guardReady, hasPendingBackendJobs, syncImageJobs]);
 
   useEffect(() => {
     if (!guardReady) {
@@ -464,17 +476,6 @@ export default function ImagePage() {
       window.removeEventListener("focus", handleFocus);
     };
   }, [guardReady, loadQuota]);
-
-  useEffect(() => {
-    if (!selectedConversation) {
-      return;
-    }
-
-    resultsViewportRef.current?.scrollTo({
-      top: resultsViewportRef.current.scrollHeight,
-      behavior: "smooth",
-    });
-  }, [selectedConversation?.updatedAt, selectedConversation?.turns.length, selectedConversation]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
