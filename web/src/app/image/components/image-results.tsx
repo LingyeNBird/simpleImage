@@ -187,19 +187,29 @@ export function ImageResults({
                             {image.url ? (
                               <>
                                 <div className="flex flex-wrap items-center gap-2">
-                                  <a
-                                    href={image.url}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="text-xs leading-5 text-sky-600 underline underline-offset-2"
-                                  >
-                                    打开临时图床链接
+                                <a
+                                  href={image.url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="text-xs leading-5 text-sky-600 underline underline-offset-2"
+                                >
+                                  打开临时图床链接
+                                </a>
+                                <Button
+                                  asChild
+                                  variant="outline"
+                                  size="sm"
+                                  className="rounded-full border-stone-200 bg-white text-stone-700 hover:bg-stone-50"
+                                >
+                                  <a href={image.url} download target="_blank" rel="noreferrer">
+                                    下载图片
                                   </a>
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="rounded-full border-stone-200 bg-white text-stone-700 hover:bg-stone-50"
-                                    onClick={() => void copyImageUrl(image.url || "")}
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="rounded-full border-stone-200 bg-white text-stone-700 hover:bg-stone-50"
+                                  onClick={() => void copyImageUrl(image.url || "")}
                                   >
                                     复制链接
                                   </Button>
