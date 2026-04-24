@@ -32,12 +32,28 @@ def _as_int(value: object, default: int = 0) -> int:
         return default
 
 
+def _as_bool(value: object, default: bool = True) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"1", "true", "yes", "on"}:
+            return True
+        if normalized in {"0", "false", "no", "off"}:
+            return False
+    return default
+
+
 @dataclass(frozen=True)
 class LocalUserPublic:
     id: str
     username: str
     role: str
     quota: int
+    allow_direct_mode: bool
+    allow_image_bed_mode: bool
     created_at: str | None
     updated_at: str | None
     last_login_at: str | None
@@ -48,6 +64,8 @@ class LocalUserPublic:
             "username": self.username,
             "role": self.role,
             "quota": self.quota,
+            "allow_direct_mode": self.allow_direct_mode,
+            "allow_image_bed_mode": self.allow_image_bed_mode,
             "created_at": self.created_at,
             "updated_at": self.updated_at,
             "last_login_at": self.last_login_at,
@@ -108,6 +126,8 @@ class UserService:
             "password_salt": password_salt,
             "role": "user",
             "quota": quota,
+            "allow_direct_mode": _as_bool(item.get("allow_direct_mode"), True),
+            "allow_image_bed_mode": _as_bool(item.get("allow_image_bed_mode"), True),
             "sessions": normalized_sessions,
             "created_at": str(item.get("created_at") or "").strip() or None,
             "updated_at": str(item.get("updated_at") or "").strip() or None,
@@ -184,6 +204,8 @@ class UserService:
             username=str(item.get("username") or ""),
             role="user",
             quota=max(0, int(item.get("quota") or 0)),
+            allow_direct_mode=_as_bool(item.get("allow_direct_mode"), True),
+            allow_image_bed_mode=_as_bool(item.get("allow_image_bed_mode"), True),
             created_at=item.get("created_at"),
             updated_at=item.get("updated_at"),
             last_login_at=item.get("last_login_at"),
@@ -213,7 +235,15 @@ class UserService:
                     return self._to_public_user(user).to_dict()
         return None
 
-    def register_user(self, username: str, password: str, quota: int = 0) -> dict[str, object]:
+    def register_user(
+        self,
+        username: str,
+        password: str,
+        quota: int = 0,
+        *,
+        allow_direct_mode: bool = True,
+        allow_image_bed_mode: bool = True,
+    ) -> dict[str, object]:
         normalized_username = self._normalize_username(username)
         plain_password = str(password or "")
         if not normalized_username:
@@ -236,6 +266,8 @@ class UserService:
                 "password_hash": self._hash_password(plain_password, salt_hex),
                 "role": "user",
                 "quota": clean_quota,
+                "allow_direct_mode": bool(allow_direct_mode),
+                "allow_image_bed_mode": bool(allow_image_bed_mode),
                 "sessions": [],
                 "created_at": now,
                 "updated_at": now,
@@ -325,6 +357,27 @@ class UserService:
                 if str(user.get("id") or "") != normalized_id:
                     continue
                 user["quota"] = safe_quota
+                user["updated_at"] = _now_text()
+                self._save_users()
+                return self._to_public_user(user).to_dict()
+        return None
+
+    def set_user_image_mode_permissions(
+        self,
+        user_id: str,
+        *,
+        allow_direct_mode: bool,
+        allow_image_bed_mode: bool,
+    ) -> dict[str, object] | None:
+        normalized_id = str(user_id or "").strip()
+        if not normalized_id:
+            return None
+        with self._lock:
+            for user in self._users:
+                if str(user.get("id") or "") != normalized_id:
+                    continue
+                user["allow_direct_mode"] = bool(allow_direct_mode)
+                user["allow_image_bed_mode"] = bool(allow_image_bed_mode)
                 user["updated_at"] = _now_text()
                 self._save_users()
                 return self._to_public_user(user).to_dict()

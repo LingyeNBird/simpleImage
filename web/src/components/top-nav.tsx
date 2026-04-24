@@ -14,6 +14,7 @@ const adminNavItems = [
   { href: "/accounts", label: "号池管理" },
   { href: "/admin/users", label: "用户管理" },
   { href: "/admin/redeem-keys", label: "兑换码管理" },
+  { href: "/admin/storage-bucket", label: "存储桶配置" },
   { href: "/settings", label: "设置" },
 ];
 

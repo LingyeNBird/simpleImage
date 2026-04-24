@@ -16,6 +16,9 @@ from services.account_service import account_service
 from services.auth_service import AuthContext, auth_service
 from services.chatgpt_service import ChatGPTService
 from services.config import config
+from services.cos_config import load_cos_config, save_cos_config
+from services.cos_storage_service import is_cos_storage_ready
+from services.cos_storage_service import count_project_images, test_connection as test_cos_connection
 from services.cpa_service import cpa_config, cpa_import_service, list_remote_files
 from services.user_service import user_service
 from services.proxy_service import test_proxy
@@ -27,6 +30,7 @@ from services.sub2api_service import (
 )
 
 from services.image_service import ImageGenerationError
+from services.image_job_service import image_job_service
 from services.version import get_app_version
 
 BASE_DIR = Path(__file__).resolve().parents[1]
@@ -39,6 +43,7 @@ class ImageGenerationRequest(BaseModel):
     n: int = Field(default=1, ge=1, le=4)
     response_format: str = "b64_json"
     history_disabled: bool = True
+    delivery_mode: str = "direct"
 
 
 class AccountCreateRequest(BaseModel):
@@ -79,6 +84,22 @@ class AdminUserCreateRequest(BaseModel):
     username: str = Field(..., min_length=3)
     password: str = Field(..., min_length=6)
     quota: int = Field(default=0, ge=0)
+    allow_direct_mode: bool = True
+    allow_image_bed_mode: bool = True
+
+
+class UserImageModeUpdateRequest(BaseModel):
+    allow_direct_mode: bool = True
+    allow_image_bed_mode: bool = True
+
+
+class ImageJobCreateRequest(BaseModel):
+    conversation_id: str = ""
+    conversation_title: str = ""
+    prompt: str = Field(..., min_length=1)
+    mode: str = "generate"
+    model: str = "auto"
+    n: int = Field(default=1, ge=1, le=4)
 
 
 class RedeemKeyGenerateRequest(BaseModel):
@@ -130,6 +151,13 @@ class CPAImportRequest(BaseModel):
 
 class SettingsUpdateRequest(BaseModel):
     model_config = ConfigDict(extra="allow")
+
+
+class CosConfigRequest(BaseModel):
+    Region: str = ""
+    SecretId: str = ""
+    SecretKey: str = ""
+    Bucket: str = ""
 
 
 class Sub2APIServerCreateRequest(BaseModel):
@@ -240,7 +268,39 @@ def _count_generated_images(result: Mapping[str, object]) -> int:
     data = result.get("data")
     if not isinstance(data, list):
         return 0
-    return sum(1 for item in data if isinstance(item, dict) and str(item.get("b64_json") or "").strip())
+    return sum(
+        1
+        for item in data
+        if isinstance(item, dict) and (str(item.get("b64_json") or "").strip() or str(item.get("url") or "").strip())
+    )
+
+
+def _get_allowed_delivery_modes(context: AuthContext) -> list[str]:
+    if context.is_admin:
+        return ["direct", "image_bed"] if is_cos_storage_ready() else ["direct"]
+    user = context.user or {}
+    allowed_modes: list[str] = []
+    if bool(user.get("allow_direct_mode", True)):
+        allowed_modes.append("direct")
+    if bool(user.get("allow_image_bed_mode", True)) and is_cos_storage_ready():
+        allowed_modes.append("image_bed")
+    return allowed_modes or ["direct"]
+
+
+def _resolve_delivery_mode(context: AuthContext, requested_mode: object) -> str:
+    normalized_mode = str(requested_mode or "direct").strip() or "direct"
+    if normalized_mode not in {"direct", "image_bed"}:
+        raise HTTPException(status_code=400, detail={"error": "delivery_mode is invalid"})
+    allowed_modes = _get_allowed_delivery_modes(context)
+    if normalized_mode not in allowed_modes:
+        raise HTTPException(status_code=403, detail={"error": "delivery mode is not allowed"})
+    return normalized_mode
+
+
+def _ensure_at_least_one_user_image_mode(allow_direct_mode: bool, allow_image_bed_mode: bool) -> None:
+    if allow_direct_mode or allow_image_bed_mode:
+        return
+    raise HTTPException(status_code=400, detail={"error": "at least one image mode must be enabled"})
 
 
 def _ensure_user_quota_or_raise(context: AuthContext, required: int) -> dict[str, object] | None:
@@ -317,14 +377,94 @@ def resolve_web_asset(requested_path: str) -> Path | None:
     return None
 
 
+def _sanitize_image_job(job: Mapping[str, object]) -> dict[str, object]:
+    result_images = job.get("result_images")
+    reference_images = job.get("reference_images")
+    return {
+        "id": str(job.get("id") or "").strip(),
+        "conversation_id": str(job.get("conversation_id") or "").strip(),
+        "conversation_title": str(job.get("conversation_title") or "").strip(),
+        "prompt": str(job.get("prompt") or "").strip(),
+        "mode": str(job.get("mode") or "generate").strip() or "generate",
+        "model": str(job.get("model") or "auto").strip() or "auto",
+        "count": _safe_int(job.get("count"), 1),
+        "status": str(job.get("status") or "queued").strip() or "queued",
+        "delivery_mode": "image_bed",
+        "created_at": str(job.get("created_at") or "").strip(),
+        "updated_at": str(job.get("updated_at") or "").strip(),
+        "error": str(job.get("error") or "").strip() or None,
+        "result_images": [dict(item) for item in result_images] if isinstance(result_images, list) else [],
+        "reference_images": [
+            {"name": str(item.get("name") or "").strip(), "type": str(item.get("type") or "image/png").strip() or "image/png"}
+            for item in reference_images
+            if isinstance(item, dict)
+        ] if isinstance(reference_images, list) else [],
+    }
+
+
 def create_app() -> FastAPI:
     chatgpt_service = ChatGPTService(account_service)
     app_version = get_app_version()
+
+    def process_image_bed_job(job_id: str) -> None:
+        job = image_job_service.get_job(job_id)
+        if job is None:
+            return
+        image_job_service.update_job_status(job_id, status="running")
+        try:
+            prompt = str(job.get("prompt") or "").strip()
+            model = str(job.get("model") or "auto").strip() or "auto"
+            count = max(1, _safe_int(job.get("count"), 1))
+            mode = str(job.get("mode") or "generate").strip()
+            if mode == "edit":
+                files = image_job_service.build_processor_files(job)
+                result = chatgpt_service.edit_with_pool(
+                    prompt,
+                    files,
+                    model,
+                    count,
+                    "b64_json",
+                    None,
+                    "image_bed",
+                )
+            else:
+                result = chatgpt_service.generate_with_pool(
+                    prompt,
+                    model,
+                    count,
+                    "b64_json",
+                    None,
+                    "image_bed",
+                )
+            data = result.get("data") if isinstance(result, dict) else []
+            result_images = []
+            if isinstance(data, list):
+                for index, item in enumerate(data, start=1):
+                    if not isinstance(item, dict):
+                        continue
+                    image_url = str(item.get("url") or "").strip()
+                    if not image_url:
+                        continue
+                    result_images.append({"id": f"{job_id}-{index}", "url": image_url, "storage": "image_bed"})
+            if not result_images:
+                raise RuntimeError("未返回图床图片")
+            user_id = str(job.get("user_id") or "").strip()
+            if user_id:
+                updated_user = user_service.consume_user_quota(user_id, len(result_images))
+                if updated_user is None:
+                    raise RuntimeError("failed to deduct local quota")
+            image_job_service.update_job_status(job_id, status="success", result_images=result_images)
+        except Exception as exc:
+            image_job_service.update_job_status(job_id, status="error", error=str(exc))
+        finally:
+            image_job_service.cleanup_job_inputs(job_id)
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):
         stop_event = Event()
         thread = start_limited_account_watcher(stop_event)
+        for queued_job in image_job_service.list_unfinished_jobs():
+            image_job_service.dispatch_job(str(queued_job.get("id") or ""), process_image_bed_job)
         try:
             yield
         finally:
@@ -380,8 +520,8 @@ def create_app() -> FastAPI:
     async def me(authorization: str | None = Header(default=None)):
         context = auth_service.require_authenticated(authorization)
         if context.is_admin:
-            return {"role": "admin", "version": app_version}
-        return {"role": "user", "user": context.user}
+            return {"role": "admin", "version": app_version, "image_delivery_modes": _get_allowed_delivery_modes(context)}
+        return {"role": "user", "user": context.user, "image_delivery_modes": _get_allowed_delivery_modes(context)}
 
     @router.post("/auth/redeem")
     async def redeem(body: UserRedeemRequest, authorization: str | None = Header(default=None)):
@@ -405,6 +545,41 @@ def create_app() -> FastAPI:
     async def get_settings(authorization: str | None = Header(default=None)):
         auth_service.require_admin(authorization)
         return {"config": config.get()}
+
+    @router.get("/api/cos-config")
+    async def get_cos_config(authorization: str | None = Header(default=None)):
+        auth_service.require_admin(authorization)
+        loaded = load_cos_config()
+        project_image_count = 0
+        if loaded:
+            try:
+                project_image_count = await run_in_threadpool(count_project_images)
+            except Exception:
+                project_image_count = 0
+        return {
+            "config": loaded.to_dict() if loaded else {"Region": "", "SecretId": "", "SecretKey": "", "Bucket": ""},
+            "project_image_count": project_image_count,
+            "ready": loaded is not None,
+        }
+
+    @router.post("/api/cos-config")
+    async def update_cos_config(body: CosConfigRequest, authorization: str | None = Header(default=None)):
+        auth_service.require_admin(authorization)
+        try:
+            saved = save_cos_config(body.model_dump(mode="python"))
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail={"error": str(exc)}) from exc
+        return {"config": saved.to_dict(), "ready": True}
+
+    @router.post("/api/cos-config/test")
+    async def test_cos_config(authorization: str | None = Header(default=None)):
+        auth_service.require_admin(authorization)
+        try:
+            result = await run_in_threadpool(test_cos_connection)
+            image_count = await run_in_threadpool(count_project_images)
+        except Exception as exc:
+            raise HTTPException(status_code=502, detail={"error": str(exc)}) from exc
+        return {"result": {**result, "project_image_count": image_count}}
 
     @router.post("/api/settings")
     async def save_settings(
@@ -485,9 +660,16 @@ def create_app() -> FastAPI:
         context = auth_service.require_authenticated(authorization)
         _ensure_user_quota_or_raise(context, body.n)
         base_url = resolve_image_base_url(request)
+        delivery_mode = _resolve_delivery_mode(context, body.delivery_mode)
         try:
             result = await run_in_threadpool(
-                chatgpt_service.generate_with_pool, body.prompt, body.model, body.n, body.response_format, base_url
+                chatgpt_service.generate_with_pool,
+                body.prompt,
+                body.model,
+                body.n,
+                body.response_format,
+                base_url,
+                delivery_mode,
             )
         except ImageGenerationError as exc:
             raise HTTPException(status_code=502, detail={"error": str(exc)}) from exc
@@ -507,11 +689,13 @@ def create_app() -> FastAPI:
             model: str = Form(default="gpt-image-1"),
             n: int = Form(default=1),
             response_format: str = Form(default="b64_json"),
+            delivery_mode: str = Form(default="direct"),
     ):
         context = auth_service.require_authenticated(authorization)
         if n < 1 or n > 4:
             raise HTTPException(status_code=400, detail={"error": "n must be between 1 and 4"})
         _ensure_user_quota_or_raise(context, n)
+        normalized_delivery_mode = _resolve_delivery_mode(context, delivery_mode)
 
         uploads = [*(image or []), *(image_list or [])]
         if not uploads:
@@ -531,7 +715,14 @@ def create_app() -> FastAPI:
 
         try:
             result = await run_in_threadpool(
-                chatgpt_service.edit_with_pool, prompt, images, model, n, response_format, base_url
+                chatgpt_service.edit_with_pool,
+                prompt,
+                images,
+                model,
+                n,
+                response_format,
+                base_url,
+                normalized_delivery_mode,
             )
         except ImageGenerationError as exc:
             raise HTTPException(status_code=502, detail={"error": str(exc)}) from exc
@@ -540,6 +731,74 @@ def create_app() -> FastAPI:
         if updated_user is not None:
             return {**result, "user": updated_user}
         return result
+
+    @router.get("/api/image-jobs")
+    async def list_image_jobs(authorization: str | None = Header(default=None)):
+        context = auth_service.require_user(authorization)
+        user = context.user or {}
+        user_id = str(user.get("id") or "").strip()
+        if not user_id:
+            raise HTTPException(status_code=401, detail={"error": "authorization is invalid"})
+        items = image_job_service.list_jobs_for_user(user_id)
+        return {"items": [_sanitize_image_job(item) for item in items]}
+
+    @router.post("/api/image-jobs")
+    async def create_image_job(
+            authorization: str | None = Header(default=None),
+            image: list[UploadFile] | None = File(default=None),
+            image_list: list[UploadFile] | None = File(default=None, alias="image[]"),
+            prompt: str = Form(...),
+            conversation_id: str = Form(default=""),
+            conversation_title: str = Form(default=""),
+            mode: str = Form(default="generate"),
+            model: str = Form(default="auto"),
+            n: int = Form(default=1),
+            delivery_mode: str = Form(default="image_bed"),
+    ):
+        context = auth_service.require_user(authorization)
+        normalized_delivery_mode = _resolve_delivery_mode(context, delivery_mode)
+        if normalized_delivery_mode != "image_bed":
+            raise HTTPException(status_code=400, detail={"error": "only image_bed mode can create async jobs"})
+        if n < 1 or n > 4:
+            raise HTTPException(status_code=400, detail={"error": "n must be between 1 and 4"})
+        normalized_mode = "edit" if mode == "edit" else "generate"
+        _ensure_user_quota_or_raise(context, n)
+        user = context.user or {}
+        user_id = str(user.get("id") or "").strip()
+        username = str(user.get("username") or "").strip()
+        if not user_id or not username:
+            raise HTTPException(status_code=401, detail={"error": "authorization is invalid"})
+
+        uploads = [*(image or []), *(image_list or [])]
+        saved_reference_images: list[dict[str, object]] = []
+        if normalized_mode == "edit":
+            if not uploads:
+                raise HTTPException(status_code=400, detail={"error": "image file is required"})
+
+        job = image_job_service.create_job(
+            user_id=user_id,
+            username=username,
+            conversation_id=conversation_id,
+            conversation_title=conversation_title,
+            prompt=prompt,
+            mode=normalized_mode,
+            model=model,
+            count=n,
+            reference_images=[],
+        )
+
+        if uploads:
+            upload_items: list[tuple[bytes, str, str]] = []
+            for upload in uploads:
+                image_data = await upload.read()
+                if not image_data:
+                    raise HTTPException(status_code=400, detail={"error": "image file is empty"})
+                upload_items.append((image_data, upload.filename or "image.png", upload.content_type or "image/png"))
+            saved_reference_images = image_job_service.save_reference_images(str(job.get("id") or ""), upload_items)
+            job = image_job_service.update_reference_images(str(job.get("id") or ""), saved_reference_images) or job
+
+        image_job_service.dispatch_job(str(job.get("id") or ""), process_image_bed_job)
+        return {"item": _sanitize_image_job(job), "user": context.user}
 
     @router.post("/v1/chat/completions")
     async def create_chat_completion(body: ChatCompletionRequest, authorization: str | None = Header(default=None)):
@@ -559,8 +818,15 @@ def create_app() -> FastAPI:
     @router.post("/api/users")
     async def create_user(body: AdminUserCreateRequest, authorization: str | None = Header(default=None)):
         auth_service.require_admin(authorization)
+        _ensure_at_least_one_user_image_mode(body.allow_direct_mode, body.allow_image_bed_mode)
         try:
-            user = user_service.register_user(body.username, body.password, quota=body.quota)
+            user = user_service.register_user(
+                body.username,
+                body.password,
+                quota=body.quota,
+                allow_direct_mode=body.allow_direct_mode,
+                allow_image_bed_mode=body.allow_image_bed_mode,
+            )
         except ValueError as exc:
             message = str(exc)
             status = 409 if "already exists" in message else 400
@@ -590,6 +856,23 @@ def create_app() -> FastAPI:
             user = user_service.set_user_quota(user_id, body.quota)
         else:
             user = user_service.add_user_quota(user_id, int(body.delta or 0))
+        if user is None:
+            raise HTTPException(status_code=404, detail={"error": "user not found"})
+        return {"item": user, "items": user_service.list_users()}
+
+    @router.post("/api/users/{user_id}/image-modes")
+    async def update_user_image_modes(
+            user_id: str,
+            body: UserImageModeUpdateRequest,
+            authorization: str | None = Header(default=None),
+    ):
+        auth_service.require_admin(authorization)
+        _ensure_at_least_one_user_image_mode(body.allow_direct_mode, body.allow_image_bed_mode)
+        user = user_service.set_user_image_mode_permissions(
+            user_id,
+            allow_direct_mode=body.allow_direct_mode,
+            allow_image_bed_mode=body.allow_image_bed_mode,
+        )
         if user is None:
             raise HTTPException(status_code=404, detail={"error": "user not found"})
         return {"item": user, "items": user_service.list_users()}

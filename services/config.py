@@ -115,7 +115,7 @@ class ConfigStore:
 
     @property
     def images_dir(self) -> Path:
-        path = DATA_DIR / "images"
+        path = DATA_DIR / "images" / "chatgpt2api-generated"
         path.mkdir(parents=True, exist_ok=True)
         return path
 

@@ -1,4 +1,4 @@
-import axios, {AxiosError, type AxiosRequestConfig} from "axios";
+import axios, {AxiosError, AxiosHeaders, type AxiosRequestConfig} from "axios";
 
 import webConfig from "@/constants/common-env";
 import {
@@ -18,9 +18,9 @@ const request = axios.create({
 request.interceptors.request.use(async (config) => {
     const nextConfig = {...config};
     const session = await getStoredAuthSession();
-    const headers = {...(nextConfig.headers || {})} as Record<string, string>;
-    if (session?.token && !headers.Authorization) {
-        headers.Authorization = `Bearer ${session.token}`;
+    const headers = AxiosHeaders.from(nextConfig.headers || {});
+    if (session?.token && !headers.get("Authorization")) {
+        headers.set("Authorization", `Bearer ${session.token}`);
     }
     nextConfig.headers = headers;
     return nextConfig;

@@ -8,11 +8,13 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import {
   createAdminUser,
   deleteAdminUser,
   fetchAdminUsers,
+  updateAdminUserImageModes,
   updateAdminUserQuota,
   type AdminUser,
 } from "@/lib/api";
@@ -35,9 +37,13 @@ export default function AdminUsersPage() {
   const [password, setPassword] = useState("");
   const [quota, setQuota] = useState("0");
   const [isCreating, setIsCreating] = useState(false);
+  const [allowDirectMode, setAllowDirectMode] = useState(true);
+  const [allowImageBedMode, setAllowImageBedMode] = useState(true);
 
   const [editingQuotaUserId, setEditingQuotaUserId] = useState<string | null>(null);
+  const [editingModesUserId, setEditingModesUserId] = useState<string | null>(null);
   const [quotaDrafts, setQuotaDrafts] = useState<Record<string, string>>({});
+  const [modeDrafts, setModeDrafts] = useState<Record<string, { allow_direct_mode: boolean; allow_image_bed_mode: boolean }>>({});
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
 
   const userCount = users.length;
@@ -55,6 +61,11 @@ export default function AdminUsersPage() {
       setUsers(data.items);
       setQuotaDrafts(
         Object.fromEntries(data.items.map((item) => [item.id, formatQuota(item.quota)])),
+      );
+      setModeDrafts(
+        Object.fromEntries(
+          data.items.map((item) => [item.id, { allow_direct_mode: item.allow_direct_mode, allow_image_bed_mode: item.allow_image_bed_mode }]),
+        ),
       );
     } catch (error) {
       const message = error instanceof Error ? error.message : "加载用户失败";
@@ -112,6 +123,10 @@ export default function AdminUsersPage() {
       toast.error("请输入用户名和密码");
       return;
     }
+    if (!allowDirectMode && !allowImageBedMode) {
+      toast.error("至少启用一种图片模式");
+      return;
+    }
 
     setIsCreating(true);
     try {
@@ -119,14 +134,23 @@ export default function AdminUsersPage() {
         username: normalizedUsername,
         password: normalizedPassword,
         quota: Math.max(0, Number(quota) || 0),
+        allow_direct_mode: allowDirectMode,
+        allow_image_bed_mode: allowImageBedMode,
       });
       setUsers(data.items);
       setQuotaDrafts(
         Object.fromEntries(data.items.map((item) => [item.id, formatQuota(item.quota)])),
       );
+      setModeDrafts(
+        Object.fromEntries(
+          data.items.map((item) => [item.id, { allow_direct_mode: item.allow_direct_mode, allow_image_bed_mode: item.allow_image_bed_mode }]),
+        ),
+      );
       setUsername("");
       setPassword("");
       setQuota("0");
+      setAllowDirectMode(true);
+      setAllowImageBedMode(true);
       toast.success("用户已创建");
     } catch (error) {
       const message = error instanceof Error ? error.message : "创建用户失败";
@@ -143,6 +167,11 @@ export default function AdminUsersPage() {
       setUsers(data.items);
       setQuotaDrafts(
         Object.fromEntries(data.items.map((item) => [item.id, formatQuota(item.quota)])),
+      );
+      setModeDrafts(
+        Object.fromEntries(
+          data.items.map((item) => [item.id, { allow_direct_mode: item.allow_direct_mode, allow_image_bed_mode: item.allow_image_bed_mode }]),
+        ),
       );
       toast.success("用户已删除");
     } catch (error) {
@@ -168,6 +197,33 @@ export default function AdminUsersPage() {
       toast.error(message);
     } finally {
       setEditingQuotaUserId(null);
+    }
+  };
+
+  const handleUpdateModes = async (user: AdminUser) => {
+    setEditingModesUserId(user.id);
+    try {
+      const draft = modeDrafts[user.id] ?? {
+        allow_direct_mode: user.allow_direct_mode,
+        allow_image_bed_mode: user.allow_image_bed_mode,
+      };
+      if (!draft.allow_direct_mode && !draft.allow_image_bed_mode) {
+        toast.error("至少启用一种图片模式");
+        return;
+      }
+      const data = await updateAdminUserImageModes(user.id, draft);
+      setUsers(data.items);
+      setModeDrafts(
+        Object.fromEntries(
+          data.items.map((item) => [item.id, { allow_direct_mode: item.allow_direct_mode, allow_image_bed_mode: item.allow_image_bed_mode }]),
+        ),
+      );
+      toast.success("图片模式权限已更新");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "更新图片模式失败";
+      toast.error(message);
+    } finally {
+      setEditingModesUserId(null);
     }
   };
 
@@ -229,7 +285,7 @@ export default function AdminUsersPage() {
                 Admin Only
               </Badge>
             </div>
-            <div className="grid gap-3 sm:grid-cols-2">
+             <div className="grid gap-3 sm:grid-cols-2">
               <Input
                 value={username}
                 onChange={(event) => setUsername(event.target.value)}
@@ -243,15 +299,23 @@ export default function AdminUsersPage() {
                 placeholder="密码"
                 className="h-11 rounded-xl border-stone-200 bg-white"
               />
-              <Input
-                type="number"
+               <Input
+                 type="number"
                 min="0"
                 value={quota}
                 onChange={(event) => setQuota(event.target.value)}
                 placeholder="初始额度"
-                className="h-11 rounded-xl border-stone-200 bg-white"
-              />
-            </div>
+                 className="h-11 rounded-xl border-stone-200 bg-white"
+               />
+               <label className="flex items-start gap-3 rounded-xl border border-stone-200 bg-white px-4 py-3 text-sm text-stone-700">
+                 <Checkbox checked={allowDirectMode} onCheckedChange={(checked) => setAllowDirectMode(Boolean(checked))} />
+                 <span>允许直传模式</span>
+               </label>
+               <label className="flex items-start gap-3 rounded-xl border border-stone-200 bg-white px-4 py-3 text-sm text-stone-700">
+                 <Checkbox checked={allowImageBedMode} onCheckedChange={(checked) => setAllowImageBedMode(Boolean(checked))} />
+                 <span>允许图床模式</span>
+               </label>
+             </div>
             <Button
               className="h-10 rounded-xl bg-stone-950 px-4 text-white hover:bg-stone-800"
               onClick={() => void handleCreateUser()}
@@ -271,14 +335,15 @@ export default function AdminUsersPage() {
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[780px] text-left">
-              <thead className="border-b border-stone-100 text-[11px] text-stone-400 uppercase tracking-[0.18em]">
-                <tr>
-                  <th className="px-4 py-3">用户名</th>
-                  <th className="w-44 px-4 py-3">额度</th>
-                  <th className="w-40 px-4 py-3">操作</th>
-                </tr>
-              </thead>
+              <table className="w-full min-w-[980px] text-left">
+                <thead className="border-b border-stone-100 text-[11px] text-stone-400 uppercase tracking-[0.18em]">
+                  <tr>
+                    <th className="px-4 py-3">用户名</th>
+                    <th className="w-44 px-4 py-3">额度</th>
+                    <th className="w-64 px-4 py-3">图片模式权限</th>
+                    <th className="w-40 px-4 py-3">操作</th>
+                  </tr>
+                </thead>
               <tbody>
                 {users.map((user) => (
                   <tr key={user.id} className="border-b border-stone-100/80 text-sm text-stone-600 hover:bg-stone-50/70">
@@ -305,6 +370,49 @@ export default function AdminUsersPage() {
                         >
                           {editingQuotaUserId === user.id ? <LoaderCircle className="size-4 animate-spin" /> : null}
                           保存
+                        </Button>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex flex-wrap items-center gap-3">
+                        <label className="flex items-center gap-2 text-sm text-stone-700">
+                          <Checkbox
+                            checked={(modeDrafts[user.id] ?? user).allow_direct_mode}
+                            onCheckedChange={(checked) =>
+                              setModeDrafts((prev) => ({
+                                ...prev,
+                                [user.id]: {
+                                  allow_direct_mode: Boolean(checked),
+                                  allow_image_bed_mode: (prev[user.id] ?? user).allow_image_bed_mode,
+                                },
+                              }))
+                            }
+                          />
+                          直传
+                        </label>
+                        <label className="flex items-center gap-2 text-sm text-stone-700">
+                          <Checkbox
+                            checked={(modeDrafts[user.id] ?? user).allow_image_bed_mode}
+                            onCheckedChange={(checked) =>
+                              setModeDrafts((prev) => ({
+                                ...prev,
+                                [user.id]: {
+                                  allow_direct_mode: (prev[user.id] ?? user).allow_direct_mode,
+                                  allow_image_bed_mode: Boolean(checked),
+                                },
+                              }))
+                            }
+                          />
+                          图床
+                        </label>
+                        <Button
+                          variant="outline"
+                          className="h-9 rounded-lg border-stone-200 bg-white px-3 text-stone-700"
+                          onClick={() => void handleUpdateModes(user)}
+                          disabled={editingModesUserId === user.id}
+                        >
+                          {editingModesUserId === user.id ? <LoaderCircle className="size-4 animate-spin" /> : null}
+                          保存模式
                         </Button>
                       </div>
                     </td>

@@ -33,7 +33,7 @@ export default function LoginPage() {
       });
       await setStoredAuthSession({
         role: "user",
-        token: data.token,
+        token: data.token || "",
         username: data.user?.username || normalizedUsername,
       });
       router.replace("/image");

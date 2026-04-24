@@ -7,6 +7,7 @@ import { ImageLightbox } from "@/components/image-lightbox";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import type { ImageDeliveryMode } from "@/lib/api";
 import type { ImageConversationMode } from "@/store/image-conversations";
 import { cn } from "@/lib/utils";
 
@@ -14,6 +15,8 @@ type ImageComposerProps = {
   mode: ImageConversationMode;
   prompt: string;
   imageCount: string;
+  deliveryMode: ImageDeliveryMode;
+  availableDeliveryModes: ImageDeliveryMode[];
   activeTaskCount: number;
   referenceImages: Array<{ name: string; dataUrl: string }>;
   textareaRef: RefObject<HTMLTextAreaElement | null>;
@@ -21,6 +24,7 @@ type ImageComposerProps = {
   onModeChange: (value: ImageConversationMode) => void;
   onPromptChange: (value: string) => void;
   onImageCountChange: (value: string) => void;
+  onDeliveryModeChange: (value: ImageDeliveryMode) => void;
   onSubmit: () => void | Promise<void>;
   onPickReferenceImage: () => void;
   onReferenceImageChange: (files: File[]) => void | Promise<void>;
@@ -31,6 +35,8 @@ export function ImageComposer({
   mode,
   prompt,
   imageCount,
+  deliveryMode,
+  availableDeliveryModes,
   activeTaskCount,
   referenceImages,
   textareaRef,
@@ -38,6 +44,7 @@ export function ImageComposer({
   onModeChange,
   onPromptChange,
   onImageCountChange,
+  onDeliveryModeChange,
   onSubmit,
   onPickReferenceImage,
   onReferenceImageChange,
@@ -174,6 +181,29 @@ export function ImageComposer({
                       className="h-8 w-[64px] border-0 bg-transparent px-0 text-center text-sm font-medium text-stone-700 shadow-none focus-visible:ring-0"
                     />
                   </div>
+                  {availableDeliveryModes.length > 1 ? (
+                    <div className="flex flex-col gap-1">
+                      <div className="flex items-center gap-2">
+                        <ModeButton
+                          active={deliveryMode === "direct"}
+                          onClick={() => onDeliveryModeChange("direct")}
+                          title="直接传输图片，耗时较久"
+                        >
+                          直传
+                        </ModeButton>
+                        <ModeButton
+                          active={deliveryMode === "image_bed"}
+                          onClick={() => onDeliveryModeChange("image_bed")}
+                          title="使用图床，避免出现连接问题"
+                        >
+                          图床
+                        </ModeButton>
+                      </div>
+                      <div className="px-1 text-xs text-stone-500">
+                        {deliveryMode === "image_bed" ? "使用图床，避免出现连接问题" : "直接传输图片，耗时较久"}
+                      </div>
+                    </div>
+                  ) : null}
                   <div className="flex items-center gap-2">
                     <ModeButton active={mode === "generate"} onClick={() => onModeChange("generate")}>
                       文生图
@@ -206,15 +236,18 @@ function ModeButton({
   active,
   children,
   onClick,
+  title,
 }: {
   active: boolean;
   children: string;
   onClick: () => void;
+  title?: string;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
+      title={title}
       className={cn(
         "rounded-full px-4 py-2 text-sm font-medium transition",
         active ? "bg-stone-950 text-white" : "bg-stone-100 text-stone-600 hover:bg-stone-200",

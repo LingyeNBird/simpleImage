@@ -1,0 +1,6 @@
+{
+  "Region": "ap-guangzhou",
+  "SecretId": "your-secret-id",
+  "SecretKey": "your-secret-key",
+  "Bucket": "your-bucket-1250000000"
+}

@@ -56,8 +56,8 @@ export function ImageResults({
           src: image.dataUrl,
         }));
         const successfulTurnImages = turn.images.flatMap((image) =>
-          image.status === "success" && image.b64_json
-            ? [{ id: image.id, src: `data:image/png;base64,${image.b64_json}` }]
+          image.status === "success" && (image.b64_json || image.url)
+            ? [{ id: image.id, src: image.b64_json ? `data:image/png;base64,${image.b64_json}` : String(image.url || "") }]
             : [],
         );
 
@@ -115,6 +115,7 @@ export function ImageResults({
                 <div className="mb-4 flex flex-wrap items-center gap-2 text-xs text-stone-500">
                   <span className="rounded-full bg-stone-100 px-3 py-1">{turn.count} 张</span>
                   <span className="rounded-full bg-stone-100 px-3 py-1">{getTurnStatusLabel(turn.status)}</span>
+                  <span className="rounded-full bg-stone-100 px-3 py-1">{turn.deliveryMode === "image_bed" ? "图床模式" : "直传模式"}</span>
                   {turn.status === "queued" ? (
                     <span className="rounded-full bg-amber-50 px-3 py-1 text-amber-700">等待当前对话中的前序任务完成</span>
                   ) : null}
@@ -122,8 +123,9 @@ export function ImageResults({
 
                 <div className="columns-1 gap-4 space-y-4 sm:columns-2 xl:columns-3">
                   {turn.images.map((image, index) => {
-                    if (image.status === "success" && image.b64_json) {
+                    if (image.status === "success" && (image.b64_json || image.url)) {
                       const currentIndex = successfulTurnImages.findIndex((item) => item.id === image.id);
+                      const src = image.b64_json ? `data:image/png;base64,${image.b64_json}` : String(image.url || "");
 
                       return (
                         <div
@@ -136,22 +138,34 @@ export function ImageResults({
                             className="group block w-full cursor-zoom-in"
                           >
                             <img
-                              src={`data:image/png;base64,${image.b64_json}`}
+                              src={src}
                               alt={`Generated result ${index + 1}`}
                               className="block h-auto w-full transition duration-200 group-hover:brightness-90"
                             />
                           </button>
-                          <div className="flex items-center justify-between gap-2 px-3 py-3">
-                            <div className="text-xs text-stone-500">结果 {index + 1}</div>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="rounded-full border-stone-200 bg-white text-stone-700 hover:bg-stone-50"
-                              onClick={() => onContinueEdit(selectedConversation.id, image)}
-                            >
-                              <Sparkles className="size-4" />
-                              加入编辑
-                            </Button>
+                          <div className="flex flex-col gap-3 px-3 py-3">
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="text-xs text-stone-500">结果 {index + 1}</div>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="rounded-full border-stone-200 bg-white text-stone-700 hover:bg-stone-50"
+                                onClick={() => onContinueEdit(selectedConversation.id, image)}
+                              >
+                                <Sparkles className="size-4" />
+                                加入编辑
+                              </Button>
+                            </div>
+                            {image.url ? (
+                              <a
+                                href={image.url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="break-all text-xs leading-5 text-sky-600 underline underline-offset-2"
+                              >
+                                {image.url}
+                              </a>
+                            ) : null}
                           </div>
                         </div>
                       );

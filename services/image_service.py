@@ -15,6 +15,7 @@ from curl_cffi.requests import Session
 from services.account_service import account_service
 from services import proof_of_work
 from services.config import config
+from services.cos_storage_service import upload_file_and_verify
 from services.proxy_service import proxy_settings
 
 
@@ -70,6 +71,13 @@ class EditInputImage:
     mime_type: str
     width: int
     height: int
+
+
+@dataclass(frozen=True)
+class SavedImageFile:
+    path: Path
+    relative_path: str
+    mime_type: str
 
 
 def _build_fp(access_token: str) -> dict:
@@ -625,25 +633,65 @@ def _download_as_base64(session: Session, download_url: str) -> str:
     return base64.b64encode(response.content).decode("ascii")
 
 
-def _download_and_save_image(session: Session, download_url: str, base_url: str | None = None) -> str:
-    """下载图片并保存到本地，返回本地 URL"""
+def _save_downloaded_image(session: Session, download_url: str, mime_type: str = "image/png") -> SavedImageFile:
     response = session.get(download_url, timeout=60)
     if not response.ok or not response.content:
         raise ImageGenerationError("download image failed")
 
-    # 生成唯一文件名
     file_hash = hashlib.md5(response.content).hexdigest()
     timestamp = int(time.time())
     filename = f"{timestamp}_{file_hash}.png"
     relative_dir = Path(time.strftime("%Y"), time.strftime("%m"), time.strftime("%d"))
-
-    # 保存到本地
     file_path = config.images_dir / relative_dir / filename
     file_path.parent.mkdir(parents=True, exist_ok=True)
     file_path.write_bytes(response.content)
+    return SavedImageFile(
+        path=file_path,
+        relative_path=relative_dir.joinpath(filename).as_posix(),
+        mime_type=mime_type,
+    )
 
-    # 使用传入的 base_url 或配置的 base_url
-    return f"{(base_url or config.base_url)}/images/{relative_dir.as_posix()}/{filename}"
+
+def _build_local_image_url(saved_file: SavedImageFile, base_url: str | None = None) -> str:
+    return f"{(base_url or config.base_url)}/images/{saved_file.relative_path}"
+
+
+def _build_result_data(
+    session: Session,
+    download_url: str,
+    prompt: str,
+    response_format: str,
+    base_url: str | None,
+    delivery_mode: str,
+) -> dict[str, str]:
+    normalized_delivery_mode = str(delivery_mode or "direct").strip() or "direct"
+    if normalized_delivery_mode == "image_bed":
+        saved_file = _save_downloaded_image(session, download_url)
+        try:
+            image_url = upload_file_and_verify(saved_file.path, saved_file.mime_type)
+        except Exception as exc:
+            raise ImageGenerationError(f"upload image to cos failed: {exc}") from exc
+        try:
+            saved_file.path.unlink(missing_ok=True)
+        except OSError:
+            pass
+        return {
+            "url": image_url,
+            "revised_prompt": prompt,
+            "storage": "image_bed",
+        }
+    if response_format == "url":
+        saved_file = _save_downloaded_image(session, download_url)
+        return {
+            "url": _build_local_image_url(saved_file, base_url),
+            "revised_prompt": prompt,
+            "storage": "direct",
+        }
+    return {
+        "b64_json": _download_as_base64(session, download_url),
+        "revised_prompt": prompt,
+        "storage": "direct",
+    }
 
 
 def _resolve_upstream_model(access_token: str, requested_model: str) -> str:
@@ -658,7 +706,14 @@ def _resolve_upstream_model(access_token: str, requested_model: str) -> str:
     return str(requested_model or DEFAULT_MODEL).strip() or DEFAULT_MODEL
 
 
-def generate_image_result(access_token: str, prompt: str, model: str = DEFAULT_MODEL, response_format: str = "b64_json", base_url: str = None) -> dict:
+def generate_image_result(
+    access_token: str,
+    prompt: str,
+    model: str = DEFAULT_MODEL,
+    response_format: str = "b64_json",
+    base_url: str | None = None,
+    delivery_mode: str = "direct",
+) -> dict:
     prompt = str(prompt or "").strip()
     access_token = str(access_token or "").strip()
     if not prompt:
@@ -709,11 +764,7 @@ def generate_image_result(access_token: str, prompt: str, model: str = DEFAULT_M
         if not download_url:
             raise ImageGenerationError("failed to get download url")
 
-        # 根据 response_format 返回不同格式
-        if response_format == "url":
-            result_data = {"url": _download_and_save_image(session, download_url, base_url), "revised_prompt": prompt}
-        else:
-            result_data = {"b64_json": _download_as_base64(session, download_url), "revised_prompt": prompt}
+        result_data = _build_result_data(session, download_url, prompt, response_format, base_url, delivery_mode)
 
         print(f"[image-upstream] success token={access_token[:12]}... images=1 format={response_format}")
         return {
@@ -768,7 +819,8 @@ def edit_image_result(
     images: list[tuple[bytes, str, str]],
     model: str = DEFAULT_MODEL,
     response_format: str = "b64_json",
-    base_url: str = None,
+    base_url: str | None = None,
+    delivery_mode: str = "direct",
 ) -> dict:
     prompt = str(prompt or "").strip()
     access_token = str(access_token or "").strip()
@@ -847,11 +899,7 @@ def edit_image_result(
         if not download_url:
             raise ImageGenerationError("failed to get download url")
 
-        # 根据 response_format 返回不同格式
-        if response_format == "url":
-            result_data = {"url": _download_and_save_image(session, download_url, base_url), "revised_prompt": prompt}
-        else:
-            result_data = {"b64_json": _download_as_base64(session, download_url), "revised_prompt": prompt}
+        result_data = _build_result_data(session, download_url, prompt, response_format, base_url, delivery_mode)
 
         print(f"[image-edit-upstream] success token={access_token[:12]}... inputs={len(uploaded_images)} format={response_format}")
         return {

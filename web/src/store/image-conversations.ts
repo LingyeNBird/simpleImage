@@ -2,7 +2,7 @@
 
 import localforage from "localforage";
 
-import type { ImageModel } from "@/lib/api";
+import type { ImageDeliveryMode, ImageModel } from "@/lib/api";
 
 export type ImageConversationMode = "generate" | "edit";
 
@@ -16,6 +16,8 @@ export type StoredImage = {
   id: string;
   status?: "loading" | "success" | "error";
   b64_json?: string;
+  url?: string;
+  storage?: "direct" | "image_bed";
   error?: string;
 };
 
@@ -23,9 +25,11 @@ export type ImageTurnStatus = "queued" | "generating" | "success" | "error";
 
 export type ImageTurn = {
   id: string;
+  backendJobId?: string;
   prompt: string;
   model: ImageModel;
   mode: ImageConversationMode;
+  deliveryMode: ImageDeliveryMode;
   referenceImages: StoredReferenceImage[];
   count: number;
   images: StoredImage[];
@@ -61,7 +65,7 @@ function normalizeStoredImage(image: StoredImage): StoredImage {
   }
   return {
     ...image,
-    status: image.b64_json ? "success" : "loading",
+    status: image.b64_json || image.url ? "success" : "loading",
   };
 }
 
@@ -118,9 +122,11 @@ function normalizeTurn(turn: ImageTurn & Record<string, unknown>): ImageTurn {
 
   return {
     id: String(turn.id || `${Date.now()}`),
+    backendJobId: typeof turn.backendJobId === "string" && turn.backendJobId ? turn.backendJobId : undefined,
     prompt: String(turn.prompt || ""),
     model: (turn.model as ImageModel) || "auto",
     mode: turn.mode === "edit" ? "edit" : "generate",
+    deliveryMode: turn.deliveryMode === "image_bed" ? "image_bed" : "direct",
     referenceImages: getLegacyReferenceImages(turn),
     count: Math.max(1, Number(turn.count || normalizedImages.length || 1)),
     images: normalizedImages,
@@ -145,6 +151,7 @@ function normalizeConversation(conversation: ImageConversation & Record<string, 
           prompt: String(conversation.prompt || ""),
           model: (conversation.model as ImageModel) || "auto",
           mode: conversation.mode === "edit" ? "edit" : "generate",
+          deliveryMode: conversation.deliveryMode === "image_bed" ? "image_bed" : "direct",
           referenceImages: getLegacyReferenceImages(conversation),
           count: Number(conversation.count || 1),
           images: Array.isArray(conversation.images) ? (conversation.images as StoredImage[]) : [],

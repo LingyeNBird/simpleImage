@@ -11,7 +11,17 @@ import { ImageLightbox } from "@/components/image-lightbox";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { editImage, fetchCurrentIdentity, generateImage, redeemUserQuota, type CurrentIdentity } from "@/lib/api";
+import {
+  createImageJob,
+  editImage,
+  fetchCurrentIdentity,
+  fetchImageJobs,
+  generateImage,
+  redeemUserQuota,
+  type CurrentIdentity,
+  type ImageDeliveryMode,
+  type ImageJob,
+} from "@/lib/api";
 import {
   clearImageConversations,
   deleteImageConversation,
@@ -109,11 +119,106 @@ function buildReferenceImageFromResult(image: StoredImage, fileName: string): St
   };
 }
 
+async function fetchImageUrlAsDataUrl(imageUrl: string) {
+  const response = await fetch(imageUrl);
+  if (!response.ok) {
+    throw new Error("读取图床图片失败");
+  }
+  const blob = await response.blob();
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(new Error("读取图床图片失败"));
+    reader.readAsDataURL(blob);
+  });
+}
+
 function pickFallbackConversationId(conversations: ImageConversation[]) {
   const activeConversation = conversations.find((conversation) =>
     conversation.turns.some((turn) => turn.status === "queued" || turn.status === "generating"),
   );
   return activeConversation?.id ?? conversations[0]?.id ?? null;
+}
+
+function mapJobStatusToTurnStatus(status: ImageJob["status"]): ImageTurnStatus {
+  if (status === "queued") {
+    return "queued";
+  }
+  if (status === "running") {
+    return "generating";
+  }
+  if (status === "success") {
+    return "success";
+  }
+  return "error";
+}
+
+function buildConversationFromImageJob(job: ImageJob): ImageConversation {
+  const turnId = `job-${job.id}`;
+  return {
+    id: job.conversation_id || `job-conversation-${job.id}`,
+    title: job.conversation_title || buildConversationTitle(job.prompt),
+    createdAt: job.created_at,
+    updatedAt: job.updated_at,
+    turns: [
+      {
+        id: turnId,
+        backendJobId: job.id,
+        prompt: job.prompt,
+        model: job.model,
+        mode: job.mode,
+        deliveryMode: "image_bed",
+        referenceImages: [],
+        count: job.count,
+        images:
+          job.status === "success"
+            ? job.result_images.map((image) => ({ id: image.id, status: "success" as const, url: image.url, storage: "image_bed" as const }))
+            : Array.from({ length: job.count }, (_, index) => ({
+                id: `${turnId}-${index}`,
+                status: job.status === "error" ? ("error" as const) : ("loading" as const),
+                error: job.status === "error" ? job.error || "生成失败" : undefined,
+              })),
+        createdAt: job.created_at,
+        status: mapJobStatusToTurnStatus(job.status),
+        error: job.status === "error" ? job.error || undefined : undefined,
+      },
+    ],
+  };
+}
+
+function mergeImageJobConversations(current: ImageConversation[], jobs: ImageJob[]) {
+  const groupedConversations = new Map<string, ImageConversation>();
+  for (const job of jobs) {
+    const nextConversation = buildConversationFromImageJob(job);
+    const existingConversation = groupedConversations.get(nextConversation.id);
+    if (!existingConversation) {
+      groupedConversations.set(nextConversation.id, nextConversation);
+      continue;
+    }
+    existingConversation.turns.push(...nextConversation.turns);
+    existingConversation.updatedAt = nextConversation.updatedAt > existingConversation.updatedAt ? nextConversation.updatedAt : existingConversation.updatedAt;
+  }
+  const remoteConversations = Array.from(groupedConversations.values()).map((conversation) => ({
+    ...conversation,
+    turns: [...conversation.turns].sort((a, b) => a.createdAt.localeCompare(b.createdAt)),
+  }));
+  const currentMap = new Map(current.map((conversation) => [conversation.id, conversation]));
+  const mergedRemoteConversations = remoteConversations.map((remoteConversation) => {
+    const localConversation = currentMap.get(remoteConversation.id);
+    if (!localConversation) {
+      return remoteConversation;
+    }
+    const localNonBackendTurns = localConversation.turns.filter((turn) => !turn.backendJobId);
+    return {
+      ...remoteConversation,
+      title: localConversation.title || remoteConversation.title,
+      createdAt: localConversation.createdAt < remoteConversation.createdAt ? localConversation.createdAt : remoteConversation.createdAt,
+      turns: [...localNonBackendTurns, ...remoteConversation.turns].sort((a, b) => a.createdAt.localeCompare(b.createdAt)),
+    };
+  });
+  const remoteIds = new Set(mergedRemoteConversations.map((conversation) => conversation.id));
+  const untouchedLocalConversations = current.filter((conversation) => !remoteIds.has(conversation.id));
+  return sortImageConversations([...untouchedLocalConversations, ...mergedRemoteConversations]);
 }
 
 function sortImageConversations(conversations: ImageConversation[]) {
@@ -198,6 +303,8 @@ export default function ImagePage() {
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
   const [availableQuota, setAvailableQuota] = useState("0");
+  const [currentIdentity, setCurrentIdentity] = useState<CurrentIdentity | null>(null);
+  const [deliveryMode, setDeliveryMode] = useState<ImageDeliveryMode>("direct");
   const [redeemText, setRedeemText] = useState("");
   const [isRedeeming, setIsRedeeming] = useState(false);
   const [isRedeemDialogOpen, setIsRedeemDialogOpen] = useState(false);
@@ -218,6 +325,10 @@ export default function ImagePage() {
       }, 0),
     [conversations],
   );
+  const availableDeliveryModes = useMemo<ImageDeliveryMode[]>(() => {
+    const modes = currentIdentity?.image_delivery_modes;
+    return modes && modes.length > 0 ? modes : ["direct"];
+  }, [currentIdentity]);
 
   useEffect(() => {
     conversationsRef.current = conversations;
@@ -246,6 +357,18 @@ export default function ImagePage() {
     };
   }, [router]);
 
+  const syncImageJobs = useCallback(async () => {
+    try {
+      const data = await fetchImageJobs();
+      const nextConversations = mergeImageJobConversations(conversationsRef.current, data.items);
+      conversationsRef.current = nextConversations;
+      setConversations(nextConversations);
+      await saveImageConversations(nextConversations);
+    } catch {
+      // ignore polling failures to keep local history usable
+    }
+  }, []);
+
   useEffect(() => {
     if (!guardReady) {
       return;
@@ -270,6 +393,7 @@ export default function ImagePage() {
             ? storedConversationId
             : null) ?? pickFallbackConversationId(normalizedItems);
         setSelectedConversationId(nextSelectedConversationId);
+        await syncImageJobs();
       } catch (error) {
         const message = error instanceof Error ? error.message : "读取会话记录失败";
         toast.error(message);
@@ -284,16 +408,35 @@ export default function ImagePage() {
     return () => {
       cancelled = true;
     };
-  }, [guardReady]);
+  }, [guardReady, syncImageJobs]);
 
   const loadQuota = useCallback(async () => {
     try {
       const identity = await fetchCurrentIdentity();
+      setCurrentIdentity(identity);
       setAvailableQuota(resolveAvailableQuota(identity));
     } catch {
       setAvailableQuota((prev) => (prev === "0" ? "0" : prev));
     }
   }, []);
+
+  useEffect(() => {
+    if (availableDeliveryModes.includes(deliveryMode)) {
+      return;
+    }
+    setDeliveryMode(availableDeliveryModes[0] || "direct");
+  }, [availableDeliveryModes, deliveryMode]);
+
+  useEffect(() => {
+    if (!guardReady) {
+      return;
+    }
+    void syncImageJobs();
+    const timer = window.setInterval(() => {
+      void syncImageJobs();
+    }, 4000);
+    return () => window.clearInterval(timer);
+  }, [guardReady, syncImageJobs]);
 
   useEffect(() => {
     if (!guardReady) {
@@ -480,25 +623,40 @@ export default function ImagePage() {
   }, []);
 
   const handleContinueEdit = useCallback(
-    (conversationId: string, image: StoredImage | StoredReferenceImage) => {
-      const nextReferenceImage =
-        "dataUrl" in image
-          ? image
-          : buildReferenceImageFromResult(image, `conversation-${conversationId}-${Date.now()}.png`);
-      if (!nextReferenceImage) {
-        return;
-      }
+    async (conversationId: string, image: StoredImage | StoredReferenceImage) => {
+      try {
+        let nextReferenceImage: StoredReferenceImage | null;
+        if ("dataUrl" in image) {
+          nextReferenceImage = image;
+        } else if (image.b64_json) {
+          nextReferenceImage = buildReferenceImageFromResult(image, `conversation-${conversationId}-${Date.now()}.png`);
+        } else if (image.url) {
+          const dataUrl = await fetchImageUrlAsDataUrl(image.url);
+          nextReferenceImage = {
+            name: `conversation-${conversationId}-${Date.now()}.png`,
+            type: "image/png",
+            dataUrl,
+          };
+        } else {
+          nextReferenceImage = null;
+        }
+        if (!nextReferenceImage) {
+          return;
+        }
 
-      setSelectedConversationId(conversationId);
-      setImageMode("edit");
-      setReferenceImages((prev) => [...prev, nextReferenceImage]);
-      setReferenceImageFiles((prev) => [
-        ...prev,
-        dataUrlToFile(nextReferenceImage.dataUrl, nextReferenceImage.name, nextReferenceImage.type),
-      ]);
-      setImagePrompt("");
-      textareaRef.current?.focus();
-      toast.success("已加入当前参考图，继续输入描述即可编辑");
+        setSelectedConversationId(conversationId);
+        setImageMode("edit");
+        setReferenceImages((prev) => [...prev, nextReferenceImage]);
+        setReferenceImageFiles((prev) => [
+          ...prev,
+          dataUrlToFile(nextReferenceImage.dataUrl, nextReferenceImage.name, nextReferenceImage.type),
+        ]);
+        setImagePrompt("");
+        textareaRef.current?.focus();
+        toast.success("已加入当前参考图，继续输入描述即可编辑");
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "读取参考图失败");
+      }
     },
     [],
   );
@@ -522,6 +680,9 @@ export default function ImagePage() {
       const snapshot = conversationsRef.current.find((conversation) => conversation.id === conversationId);
       const queuedTurn = snapshot?.turns.find((turn) => turn.status === "queued");
       if (!snapshot || !queuedTurn) {
+        return;
+      }
+      if (queuedTurn.backendJobId || queuedTurn.deliveryMode === "image_bed") {
         return;
       }
 
@@ -579,10 +740,10 @@ export default function ImagePage() {
           try {
             const data =
               queuedTurn.mode === "edit"
-                ? await editImage(referenceFiles, queuedTurn.prompt)
-                : await generateImage(queuedTurn.prompt);
+                ? await editImage(referenceFiles, queuedTurn.prompt, queuedTurn.model, queuedTurn.deliveryMode)
+                : await generateImage(queuedTurn.prompt, queuedTurn.model, queuedTurn.deliveryMode);
             const first = data.data?.[0];
-            if (!first?.b64_json) {
+            if (!first?.b64_json && !first?.url) {
               throw new Error("未返回图片数据");
             }
 
@@ -590,6 +751,8 @@ export default function ImagePage() {
               id: pendingImage.id,
               status: "success",
               b64_json: first.b64_json,
+              url: first.url,
+              storage: first.storage === "image_bed" ? "image_bed" : "direct",
             };
 
             await updateConversation(
@@ -738,12 +901,14 @@ export default function ImagePage() {
       : null;
     const now = new Date().toISOString();
     const conversationId = targetConversation?.id ?? createId();
+    const conversationTitle = targetConversation?.title ?? buildConversationTitle(prompt);
     const turnId = createId();
     const draftTurn: ImageTurn = {
       id: turnId,
       prompt,
       model: "auto",
       mode: imageMode,
+      deliveryMode,
       referenceImages: imageMode === "edit" ? referenceImages : [],
       count: parsedCount,
       images: Array.from({ length: parsedCount }, (_, index) => ({
@@ -762,7 +927,7 @@ export default function ImagePage() {
         }
       : {
           id: conversationId,
-          title: buildConversationTitle(prompt),
+          title: conversationTitle,
           createdAt: now,
           updatedAt: now,
           turns: [draftTurn],
@@ -772,7 +937,60 @@ export default function ImagePage() {
     clearComposerInputs();
 
     await persistConversation(baseConversation);
-    void runConversationQueue(conversationId);
+
+    if (deliveryMode === "image_bed") {
+      try {
+        const data = await createImageJob({
+          prompt,
+          conversationId,
+          conversationTitle,
+          mode: imageMode,
+          imageCount: parsedCount,
+          model: "auto",
+          files: imageMode === "edit" ? referenceImageFiles : [],
+        });
+        await updateConversation(conversationId, (current) => {
+          const conversation = current ?? baseConversation;
+          return {
+            ...conversation,
+            updatedAt: data.item.updated_at,
+            turns: conversation.turns.map((turn) =>
+              turn.id === turnId
+                ? {
+                    ...turn,
+                    backendJobId: data.item.id,
+                    status: mapJobStatusToTurnStatus(data.item.status),
+                  }
+                : turn,
+            ),
+          };
+        });
+        await syncImageJobs();
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "提交图床任务失败";
+        await updateConversation(conversationId, (current) => {
+          const conversation = current ?? baseConversation;
+          return {
+            ...conversation,
+            updatedAt: new Date().toISOString(),
+            turns: conversation.turns.map((turn) =>
+              turn.id === turnId
+                ? {
+                    ...turn,
+                    status: "error",
+                    error: message,
+                    images: turn.images.map((image) => ({ ...image, status: "error", error: message })),
+                  }
+                : turn,
+            ),
+          };
+        });
+        toast.error(message);
+        return;
+      }
+    } else {
+      void runConversationQueue(conversationId);
+    }
 
     const targetStats = getImageConversationStats(baseConversation);
     if (targetStats.running > 0 || targetStats.queued > 1) {
@@ -883,6 +1101,8 @@ export default function ImagePage() {
             mode={imageMode}
             prompt={imagePrompt}
             imageCount={imageCount}
+            deliveryMode={deliveryMode}
+            availableDeliveryModes={availableDeliveryModes}
             activeTaskCount={activeTaskCount}
             referenceImages={referenceImages}
             textareaRef={textareaRef}
@@ -890,6 +1110,7 @@ export default function ImagePage() {
             onModeChange={setImageMode}
             onPromptChange={setImagePrompt}
             onImageCountChange={setImageCount}
+            onDeliveryModeChange={setDeliveryMode}
             onSubmit={handleSubmit}
             onPickReferenceImage={() => fileInputRef.current?.click()}
             onReferenceImageChange={handleReferenceImageChange}

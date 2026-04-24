@@ -4,20 +4,50 @@ export type AccountType = "Free" | "Plus" | "ProLite" | "Pro" | "Team";
 export type AccountStatus = "正常" | "限流" | "异常" | "禁用";
 export type ImageModel = "auto" | "gpt-image-1" | "gpt-image-2";
 export type AuthRole = "admin" | "user";
+export type ImageDeliveryMode = "direct" | "image_bed";
 
 export type CurrentIdentity = {
   role: AuthRole;
   id?: string;
   username?: string;
   quota?: number;
+  allow_direct_mode?: boolean;
+  allow_image_bed_mode?: boolean;
+  image_delivery_modes?: ImageDeliveryMode[];
 };
 
 export type AdminUser = {
   id: string;
   username: string;
   quota: number;
+  allow_direct_mode: boolean;
+  allow_image_bed_mode: boolean;
   created_at?: string;
   updated_at?: string;
+};
+
+export type CosConfig = {
+  Region: string;
+  SecretId: string;
+  SecretKey: string;
+  Bucket: string;
+};
+
+export type ImageJob = {
+  id: string;
+  conversation_id: string;
+  conversation_title: string;
+  prompt: string;
+  mode: "generate" | "edit";
+  model: ImageModel;
+  count: number;
+  status: "queued" | "running" | "success" | "error";
+  delivery_mode: "image_bed";
+  created_at: string;
+  updated_at: string;
+  error?: string | null;
+  result_images: Array<{ id: string; url: string; storage: "image_bed" }>;
+  reference_images: Array<{ name: string; type: string }>;
 };
 
 export type AdminRedeemKey = {
@@ -91,6 +121,7 @@ export type SettingsConfig = {
   base_url?: string;
   "auth-key"?: string;
   refresh_account_interval_minute?: number | string;
+  image_bed_cleanup_days?: number | string;
   [key: string]: unknown;
 };
 
@@ -133,17 +164,20 @@ export async function fetchCurrentIdentity() {
   const data = await httpRequest<{
     role: AuthRole;
     version?: string;
+    image_delivery_modes?: ImageDeliveryMode[];
     user?: {
       id?: string;
       username?: string;
       quota?: number;
+      allow_direct_mode?: boolean;
+      allow_image_bed_mode?: boolean;
     };
   }>("/auth/me", {
     redirectOnUnauthorized: false,
   });
 
   if (data.role === "admin") {
-    return { role: "admin" } satisfies CurrentIdentity;
+    return { role: "admin", image_delivery_modes: data.image_delivery_modes || ["direct"] } satisfies CurrentIdentity;
   }
 
   return {
@@ -151,6 +185,9 @@ export async function fetchCurrentIdentity() {
     id: data.user?.id,
     username: data.user?.username,
     quota: data.user?.quota,
+    allow_direct_mode: data.user?.allow_direct_mode,
+    allow_image_bed_mode: data.user?.allow_image_bed_mode,
+    image_delivery_modes: data.image_delivery_modes || ["direct"],
   } satisfies CurrentIdentity;
 }
 
@@ -176,6 +213,8 @@ export async function createAdminUser(payload: {
   username: string;
   password: string;
   quota?: number;
+  allow_direct_mode?: boolean;
+  allow_image_bed_mode?: boolean;
 }) {
   return httpRequest<{ item: AdminUser; items: AdminUser[] }>("/api/users", {
     method: "POST",
@@ -203,6 +242,16 @@ export async function generateAdminRedeemKeys(payload: {
   quantity: number;
 }) {
   return httpRequest<{ items: Array<{ key: string; amount: number }> }>("/api/redeem-keys/generate", {
+    method: "POST",
+    body: payload,
+  });
+}
+
+export async function updateAdminUserImageModes(
+  userId: string,
+  payload: { allow_direct_mode: boolean; allow_image_bed_mode: boolean },
+) {
+  return httpRequest<{ item: AdminUser; items: AdminUser[] }>(`/api/users/${userId}/image-modes`, {
     method: "POST",
     body: payload,
   });
@@ -254,8 +303,8 @@ export async function updateAccount(
   });
 }
 
-export async function generateImage(prompt: string, model?: ImageModel) {
-  return httpRequest<{ created: number; data: Array<{ b64_json: string; revised_prompt?: string }> }>(
+export async function generateImage(prompt: string, model?: ImageModel, deliveryMode: ImageDeliveryMode = "direct") {
+  return httpRequest<{ created: number; data: Array<{ b64_json?: string; url?: string; revised_prompt?: string; storage?: string }> }>(
     "/v1/images/generations",
     {
       method: "POST",
@@ -264,12 +313,18 @@ export async function generateImage(prompt: string, model?: ImageModel) {
         ...(model ? { model } : {}),
         n: 1,
         response_format: "b64_json",
+        delivery_mode: deliveryMode,
       },
     },
   );
 }
 
-export async function editImage(files: File | File[], prompt: string, model?: ImageModel) {
+export async function editImage(
+  files: File | File[],
+  prompt: string,
+  model?: ImageModel,
+  deliveryMode: ImageDeliveryMode = "direct",
+) {
   const formData = new FormData();
   const uploadFiles = Array.isArray(files) ? files : [files];
 
@@ -281,8 +336,9 @@ export async function editImage(files: File | File[], prompt: string, model?: Im
     formData.append("model", model);
   }
   formData.append("n", "1");
+  formData.append("delivery_mode", deliveryMode);
 
-  return httpRequest<{ created: number; data: Array<{ b64_json: string; revised_prompt?: string }> }>(
+  return httpRequest<{ created: number; data: Array<{ b64_json?: string; url?: string; revised_prompt?: string; storage?: string }> }>(
     "/v1/images/edits",
     {
       method: "POST",
@@ -299,6 +355,57 @@ export async function updateSettingsConfig(settings: SettingsConfig) {
   return httpRequest<{ config: SettingsConfig }>("/api/settings", {
     method: "POST",
     body: settings,
+  });
+}
+
+export async function fetchCosConfig() {
+  return httpRequest<{ config: CosConfig; ready: boolean; project_image_count: number }>("/api/cos-config");
+}
+
+export async function updateCosConfig(config: CosConfig) {
+  return httpRequest<{ config: CosConfig; ready: boolean }>("/api/cos-config", {
+    method: "POST",
+    body: config,
+  });
+}
+
+export async function testCosConfig() {
+  return httpRequest<{ result: { ok: boolean; bucket: string; prefix: string; sample_count: number; project_image_count: number } }>(
+    "/api/cos-config/test",
+    {
+      method: "POST",
+      body: {},
+    },
+  );
+}
+
+export async function fetchImageJobs() {
+  return httpRequest<{ items: ImageJob[] }>("/api/image-jobs");
+}
+
+export async function createImageJob(payload: {
+  prompt: string;
+  conversationId: string;
+  conversationTitle: string;
+  mode: "generate" | "edit";
+  imageCount: number;
+  model?: ImageModel;
+  files?: File[];
+}) {
+  const formData = new FormData();
+  formData.append("prompt", payload.prompt);
+  formData.append("conversation_id", payload.conversationId);
+  formData.append("conversation_title", payload.conversationTitle);
+  formData.append("mode", payload.mode);
+  formData.append("model", payload.model || "auto");
+  formData.append("n", String(payload.imageCount));
+  formData.append("delivery_mode", "image_bed");
+  for (const file of payload.files || []) {
+    formData.append("image", file);
+  }
+  return httpRequest<{ item: ImageJob; user?: { id?: string; username?: string; quota?: number } }>("/api/image-jobs", {
+    method: "POST",
+    body: formData,
   });
 }
 

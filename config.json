@@ -2,6 +2,7 @@
   "auth-key": "chatgpt2api",
   "next_dev": true,
   "refresh_account_interval_minute": 60,
+  "image_bed_cleanup_days": 3,
   "proxy": "",
   "base_url": ""
 }

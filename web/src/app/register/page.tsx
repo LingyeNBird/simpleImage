@@ -33,7 +33,7 @@ export default function RegisterPage() {
       });
       await setStoredAuthSession({
         role: "user",
-        token: data.token,
+        token: data.token || "",
         username: data.user?.username || normalizedUsername,
       });
       toast.success("注册成功");
