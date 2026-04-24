@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { PanelLeft } from "lucide-react";
 import { toast } from "sonner";
 
 import { ImageComposer } from "@/app/image/components/image-composer";
@@ -317,6 +318,7 @@ export default function ImagePage() {
   const [lightboxImages, setLightboxImages] = useState<ImageLightboxItem[]>([]);
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState(0);
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
   const parsedCount = useMemo(() => Math.max(1, Math.min(10, Number(imageCount) || 1)), [imageCount]);
   const selectedConversation = useMemo(
@@ -547,6 +549,16 @@ export default function ImagePage() {
     textareaRef.current?.focus();
   };
 
+  const handleMobileCreateDraft = useCallback(() => {
+    handleCreateDraft();
+    setIsMobileSidebarOpen(false);
+  }, [handleCreateDraft]);
+
+  const handleSelectConversation = useCallback((id: string) => {
+    setSelectedConversationId(id);
+    setIsMobileSidebarOpen(false);
+  }, []);
+
   const handleDeleteConversation = async (id: string) => {
     const nextConversations = conversations.filter((item) => item.id !== id);
     conversationsRef.current = nextConversations;
@@ -580,6 +592,11 @@ export default function ImagePage() {
       toast.error(message);
     }
   };
+
+  const handleMobileClearHistory = useCallback(async () => {
+    await handleClearHistory();
+    setIsMobileSidebarOpen(false);
+  }, [handleClearHistory]);
 
   const appendReferenceImages = useCallback(async (files: File[]) => {
     if (files.length === 0) {
@@ -1041,8 +1058,37 @@ export default function ImagePage() {
 
   return (
     <>
+      <Dialog open={isMobileSidebarOpen} onOpenChange={setIsMobileSidebarOpen}>
+        <DialogContent
+          showCloseButton={false}
+          aria-describedby={undefined}
+          className="top-0 left-0 h-dvh w-[min(86vw,320px)] max-w-none translate-x-0 translate-y-0 rounded-none border-r border-stone-200/80 bg-[#f7f5f2] p-4 shadow-[0_12px_48px_rgba(16,24,40,0.18)] duration-300 data-[state=closed]:slide-out-to-left data-[state=open]:slide-in-from-left"
+        >
+          <div className="flex h-full min-h-0 flex-col">
+            <div className="mb-3 px-1">
+              <DialogTitle className="text-base font-semibold text-stone-900">对话列表</DialogTitle>
+              <DialogDescription className="mt-1 text-xs text-stone-500">
+                在手机上收起历史记录，把更多空间留给图片内容。
+              </DialogDescription>
+            </div>
+            <ImageSidebar
+              className="min-h-0 flex-1 border-r-0 pr-0"
+              conversations={conversations}
+              isLoadingHistory={isLoadingHistory}
+              selectedConversationId={selectedConversationId}
+              onCreateDraft={handleMobileCreateDraft}
+              onClearHistory={handleMobileClearHistory}
+              onSelectConversation={handleSelectConversation}
+              onDeleteConversation={handleDeleteConversation}
+              formatConversationTime={formatConversationTime}
+            />
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <section className="mx-auto grid h-[calc(100vh-5rem)] min-h-0 w-full max-w-[1380px] grid-cols-1 gap-3 px-3 pb-6 lg:grid-cols-[240px_minmax(0,1fr)]">
         <ImageSidebar
+          className="hidden lg:block"
           conversations={conversations}
           isLoadingHistory={isLoadingHistory}
           selectedConversationId={selectedConversationId}
@@ -1054,14 +1100,24 @@ export default function ImagePage() {
         />
 
         <div className="flex min-h-0 flex-col gap-4">
-          {availableQuota !== "∞" ? (
-            <div className="flex justify-end px-2 sm:px-4">
+          <div className="flex items-center justify-between gap-3 px-2 sm:px-4">
+            <Button
+              type="button"
+              variant="outline"
+              className="h-9 rounded-full border-stone-200 bg-white px-4 text-xs font-medium text-stone-700 shadow-none lg:hidden"
+              onClick={() => setIsMobileSidebarOpen(true)}
+            >
+              <PanelLeft className="size-4" />
+              对话列表
+            </Button>
+
+            {availableQuota !== "∞" ? (
               <Dialog open={isRedeemDialogOpen} onOpenChange={setIsRedeemDialogOpen}>
                 <DialogTrigger asChild>
                   <Button
                     type="button"
                     variant="outline"
-                    className="h-9 rounded-full border-stone-200 bg-white px-4 text-xs font-medium text-stone-700 shadow-none"
+                    className="ml-auto h-9 rounded-full border-stone-200 bg-white px-4 text-xs font-medium text-stone-700 shadow-none"
                   >
                     剩余额度 {availableQuota}
                   </Button>
@@ -1090,8 +1146,8 @@ export default function ImagePage() {
                   </div>
                 </DialogContent>
               </Dialog>
-            </div>
-          ) : null}
+            ) : null}
+          </div>
 
           <div
             ref={resultsViewportRef}
