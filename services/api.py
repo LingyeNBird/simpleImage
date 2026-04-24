@@ -399,7 +399,17 @@ def _sanitize_image_job(job: Mapping[str, object]) -> dict[str, object]:
             for item in reference_images
             if isinstance(item, dict)
         ] if isinstance(reference_images, list) else [],
-    }
+}
+
+
+def _resolve_image_job_owner(context: AuthContext) -> tuple[str, str]:
+    if context.is_admin:
+        return "admin", "admin"
+    user = context.user or {}
+    user_id = str(user.get("id") or "").strip()
+    if not user_id:
+        raise HTTPException(status_code=401, detail={"error": "authorization is invalid"})
+    return "user", user_id
 
 
 def create_app() -> FastAPI:
@@ -448,8 +458,9 @@ def create_app() -> FastAPI:
                     result_images.append({"id": f"{job_id}-{index}", "url": image_url, "storage": "image_bed"})
             if not result_images:
                 raise RuntimeError("未返回图床图片")
+            owner_role = str(job.get("owner_role") or "user").strip() or "user"
             user_id = str(job.get("user_id") or "").strip()
-            if user_id:
+            if owner_role != "admin" and user_id:
                 updated_user = user_service.consume_user_quota(user_id, len(result_images))
                 if updated_user is None:
                     raise RuntimeError("failed to deduct local quota")
@@ -734,12 +745,9 @@ def create_app() -> FastAPI:
 
     @router.get("/api/image-jobs")
     async def list_image_jobs(authorization: str | None = Header(default=None)):
-        context = auth_service.require_user(authorization)
-        user = context.user or {}
-        user_id = str(user.get("id") or "").strip()
-        if not user_id:
-            raise HTTPException(status_code=401, detail={"error": "authorization is invalid"})
-        items = image_job_service.list_jobs_for_user(user_id)
+        context = auth_service.require_authenticated(authorization)
+        _, owner_id = _resolve_image_job_owner(context)
+        items = image_job_service.list_jobs_for_user(owner_id)
         return {"items": [_sanitize_image_job(item) for item in items]}
 
     @router.post("/api/image-jobs")
@@ -755,7 +763,7 @@ def create_app() -> FastAPI:
             n: int = Form(default=1),
             delivery_mode: str = Form(default="image_bed"),
     ):
-        context = auth_service.require_user(authorization)
+        context = auth_service.require_authenticated(authorization)
         normalized_delivery_mode = _resolve_delivery_mode(context, delivery_mode)
         if normalized_delivery_mode != "image_bed":
             raise HTTPException(status_code=400, detail={"error": "only image_bed mode can create async jobs"})
@@ -763,9 +771,9 @@ def create_app() -> FastAPI:
             raise HTTPException(status_code=400, detail={"error": "n must be between 1 and 4"})
         normalized_mode = "edit" if mode == "edit" else "generate"
         _ensure_user_quota_or_raise(context, n)
+        owner_role, user_id = _resolve_image_job_owner(context)
         user = context.user or {}
-        user_id = str(user.get("id") or "").strip()
-        username = str(user.get("username") or "").strip()
+        username = "admin" if context.is_admin else str(user.get("username") or "").strip()
         if not user_id or not username:
             raise HTTPException(status_code=401, detail={"error": "authorization is invalid"})
 
@@ -776,6 +784,7 @@ def create_app() -> FastAPI:
                 raise HTTPException(status_code=400, detail={"error": "image file is required"})
 
         job = image_job_service.create_job(
+            owner_role=owner_role,
             user_id=user_id,
             username=username,
             conversation_id=conversation_id,

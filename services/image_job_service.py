@@ -71,6 +71,7 @@ def _normalize_job(raw: object) -> dict[str, object] | None:
         status = "queued"
     return {
         "id": job_id,
+        "owner_role": str(raw.get("owner_role") or "user").strip() or "user",
         "user_id": str(raw.get("user_id") or "").strip(),
         "username": str(raw.get("username") or "").strip(),
         "conversation_id": str(raw.get("conversation_id") or job_id).strip() or job_id,
@@ -152,6 +153,7 @@ class ImageJobService:
     def create_job(
         self,
         *,
+        owner_role: str,
         user_id: str,
         username: str,
         conversation_id: str,
@@ -165,6 +167,7 @@ class ImageJobService:
         now = _now_iso()
         job = {
             "id": uuid.uuid4().hex,
+            "owner_role": "admin" if owner_role == "admin" else "user",
             "user_id": str(user_id or "").strip(),
             "username": str(username or "").strip(),
             "conversation_id": str(conversation_id or "").strip() or uuid.uuid4().hex,
