@@ -2,10 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { PanelLeft } from "lucide-react";
+import { BookOpen, PanelLeft } from "lucide-react";
 import { toast } from "sonner";
 
 import { ImageComposer } from "@/app/image/components/image-composer";
+import { PromptLibraryDialog } from "@/app/image/components/prompt-library-dialog";
 import { ImageResults, type ImageLightboxItem } from "@/app/image/components/image-results";
 import { ImageSidebar } from "@/app/image/components/image-sidebar";
 import { ImageLightbox } from "@/components/image-lightbox";
@@ -324,6 +325,8 @@ export default function ImagePage() {
   const [lightboxIndex, setLightboxIndex] = useState(0);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isMobileViewport, setIsMobileViewport] = useState(false);
+  const [isPromptLibraryOpen, setIsPromptLibraryOpen] = useState(false);
+  const [promptLibraryUploadDraft, setPromptLibraryUploadDraft] = useState<{ title?: string; prompt: string } | null>(null);
 
   const parsedCount = useMemo(() => Math.max(1, Math.min(10, Number(imageCount) || 1)), [imageCount]);
   const selectedConversation = useMemo(
@@ -1105,6 +1108,28 @@ export default function ImagePage() {
     }
   };
 
+  const handleInsertPrompt = (nextPrompt: string) => {
+    const normalized = nextPrompt.trim();
+    if (!normalized) {
+      return;
+    }
+    setImagePrompt((current) => {
+      const trimmedCurrent = current.trim();
+      return trimmedCurrent ? `${trimmedCurrent}\n${normalized}` : normalized;
+    });
+    setTimeout(() => textareaRef.current?.focus(), 0);
+  };
+
+  const handleUploadPromptFromConversation = (promptValue: string) => {
+    const normalized = promptValue.trim();
+    if (!normalized) {
+      toast.error("当前提示词为空，无法上传");
+      return;
+    }
+    setPromptLibraryUploadDraft({ prompt: normalized });
+    setIsPromptLibraryOpen(true);
+  };
+
   if (!guardReady) {
     return null;
   }
@@ -1210,8 +1235,21 @@ export default function ImagePage() {
               selectedConversation={selectedConversation}
               onOpenLightbox={openLightbox}
               onContinueEdit={handleContinueEdit}
+              onUploadPrompt={handleUploadPromptFromConversation}
               formatConversationTime={formatConversationTime}
             />
+          </div>
+
+          <div className="flex justify-end px-2 sm:px-4">
+            <Button
+              type="button"
+              variant="outline"
+              className="h-10 rounded-full border-stone-200 bg-white px-4 text-sm font-medium text-stone-700 shadow-none"
+              onClick={() => setIsPromptLibraryOpen(true)}
+            >
+              <BookOpen className="size-4" />
+              提示词库
+            </Button>
           </div>
 
           <ImageComposer
@@ -1245,6 +1283,14 @@ export default function ImagePage() {
         open={lightboxOpen}
         onOpenChange={setLightboxOpen}
         onIndexChange={setLightboxIndex}
+      />
+
+      <PromptLibraryDialog
+        open={isPromptLibraryOpen}
+        onOpenChange={setIsPromptLibraryOpen}
+        onInsertPrompt={handleInsertPrompt}
+        uploadDraft={promptLibraryUploadDraft}
+        onUploadDraftConsumed={() => setPromptLibraryUploadDraft(null)}
       />
     </>
   );

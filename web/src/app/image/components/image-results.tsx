@@ -15,6 +15,7 @@ type ImageResultsProps = {
   selectedConversation: ImageConversation | null;
   onOpenLightbox: (images: ImageLightboxItem[], index: number) => void;
   onContinueEdit: (conversationId: string, image: StoredImage | StoredReferenceImage) => void;
+  onUploadPrompt: (prompt: string) => void;
   formatConversationTime: (value: string) => string;
 };
 
@@ -22,6 +23,7 @@ export function ImageResults({
   selectedConversation,
   onOpenLightbox,
   onContinueEdit,
+  onUploadPrompt,
   formatConversationTime,
 }: ImageResultsProps) {
   const copyImageUrl = async (url: string) => {
@@ -102,6 +104,17 @@ export function ImageResults({
                   <span>{formatConversationTime(turn.createdAt)}</span>
                 </div>
                 <div className="text-right">{turn.prompt}</div>
+                <div className="mt-3 flex justify-end">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="rounded-full border-stone-200 bg-white text-stone-700 hover:bg-stone-50"
+                    onClick={() => onUploadPrompt(turn.prompt)}
+                  >
+                    上传到提示词库
+                  </Button>
+                </div>
               </div>
             </div>
 
