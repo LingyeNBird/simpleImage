@@ -30,6 +30,15 @@ from services.sub2api_service import (
 )
 
 from services.image_service import ImageGenerationError
+from services.image_options import (
+    DEFAULT_IMAGE_SIZE,
+    DEFAULT_IMAGE_UPSTREAM_ENDPOINT,
+    DEFAULT_RESPONSE_CANVAS,
+    DEFAULT_RESPONSE_QUALITY,
+    DEFAULT_RESPONSE_RESOLUTION,
+    normalize_image_response_options,
+    normalize_image_size,
+)
 from services.image_job_service import image_job_service
 from services.prompt_library_service import prompt_library_service
 from services.version import get_app_version
@@ -42,10 +51,14 @@ class ImageGenerationRequest(BaseModel):
     prompt: str = Field(..., min_length=1)
     model: str = "auto"
     n: int = Field(default=1, ge=1, le=4)
-    size: str = "1:1"
+    size: str = DEFAULT_IMAGE_SIZE
     response_format: str = "b64_json"
     history_disabled: bool = True
     delivery_mode: str = "direct"
+    upstream_endpoint: str = DEFAULT_IMAGE_UPSTREAM_ENDPOINT
+    response_canvas: str = DEFAULT_RESPONSE_CANVAS
+    response_resolution: str = DEFAULT_RESPONSE_RESOLUTION
+    response_quality: str = DEFAULT_RESPONSE_QUALITY
 
 
 class AccountCreateRequest(BaseModel):
@@ -102,6 +115,11 @@ class ImageJobCreateRequest(BaseModel):
     mode: str = "generate"
     model: str = "auto"
     n: int = Field(default=1, ge=1, le=4)
+    size: str = DEFAULT_IMAGE_SIZE
+    upstream_endpoint: str = DEFAULT_IMAGE_UPSTREAM_ENDPOINT
+    response_canvas: str = DEFAULT_RESPONSE_CANVAS
+    response_resolution: str = DEFAULT_RESPONSE_RESOLUTION
+    response_quality: str = DEFAULT_RESPONSE_QUALITY
 
 
 class RedeemKeyGenerateRequest(BaseModel):
@@ -402,6 +420,12 @@ def resolve_web_asset(requested_path: str) -> Path | None:
 def _sanitize_image_job(job: Mapping[str, object]) -> dict[str, object]:
     result_images = job.get("result_images")
     reference_images = job.get("reference_images")
+    response_options = normalize_image_response_options(
+        job.get("upstream_endpoint"),
+        job.get("response_canvas"),
+        job.get("response_resolution"),
+        job.get("response_quality"),
+    )
     sanitized_result_images = []
     if isinstance(result_images, list):
         for item in result_images:
@@ -439,7 +463,11 @@ def _sanitize_image_job(job: Mapping[str, object]) -> dict[str, object]:
         "mode": str(job.get("mode") or "generate").strip() or "generate",
         "model": str(job.get("model") or "auto").strip() or "auto",
         "count": _safe_int(job.get("count"), 1),
-        "size": str(job.get("size") or "1:1").strip() or "1:1",
+        "size": normalize_image_size(job.get("size")),
+        "upstream_endpoint": response_options.upstream_endpoint,
+        "response_canvas": response_options.canvas,
+        "response_resolution": response_options.resolution,
+        "response_quality": response_options.quality,
         "status": str(job.get("status") or "queued").strip() or "queued",
         "delivery_mode": "image_bed",
         "created_at": str(job.get("created_at") or "").strip(),
@@ -515,7 +543,13 @@ def create_app() -> FastAPI:
             prompt = str(job.get("prompt") or "").strip()
             model = str(job.get("model") or "auto").strip() or "auto"
             count = max(1, _safe_int(job.get("count"), 1))
-            size = str(job.get("size") or "1:1").strip() or "1:1"
+            size = normalize_image_size(job.get("size"))
+            response_options = normalize_image_response_options(
+                job.get("upstream_endpoint"),
+                job.get("response_canvas"),
+                job.get("response_resolution"),
+                job.get("response_quality"),
+            )
             mode = str(job.get("mode") or "generate").strip()
             if mode == "edit":
                 files = image_job_service.build_processor_files(job)
@@ -528,6 +562,7 @@ def create_app() -> FastAPI:
                     None,
                     "image_bed",
                     size,
+                    response_options,
                 )
             else:
                 result = chatgpt_service.generate_with_pool(
@@ -538,6 +573,7 @@ def create_app() -> FastAPI:
                     None,
                     "image_bed",
                     size,
+                    response_options,
                 )
             data = result.get("data") if isinstance(result, dict) else []
             result_images = []
@@ -780,6 +816,12 @@ def create_app() -> FastAPI:
         _ensure_user_quota_or_raise(context, body.n)
         base_url = resolve_image_base_url(request)
         delivery_mode = _resolve_delivery_mode(context, body.delivery_mode)
+        response_options = normalize_image_response_options(
+            body.upstream_endpoint,
+            body.response_canvas,
+            body.response_resolution,
+            body.response_quality,
+        )
         try:
             result = await run_in_threadpool(
                 chatgpt_service.generate_with_pool,
@@ -789,7 +831,8 @@ def create_app() -> FastAPI:
                 body.response_format,
                 base_url,
                 delivery_mode,
-                body.size,
+                normalize_image_size(body.size),
+                response_options,
             )
         except ImageGenerationError as exc:
             raise HTTPException(status_code=502, detail={"error": str(exc)}) from exc
@@ -810,13 +853,23 @@ def create_app() -> FastAPI:
             n: int = Form(default=1),
             response_format: str = Form(default="b64_json"),
             delivery_mode: str = Form(default="direct"),
-            size: str = Form(default="1:1"),
+            size: str = Form(default=DEFAULT_IMAGE_SIZE),
+            upstream_endpoint: str = Form(default=DEFAULT_IMAGE_UPSTREAM_ENDPOINT),
+            response_canvas: str = Form(default=DEFAULT_RESPONSE_CANVAS),
+            response_resolution: str = Form(default=DEFAULT_RESPONSE_RESOLUTION),
+            response_quality: str = Form(default=DEFAULT_RESPONSE_QUALITY),
     ):
         context = auth_service.require_authenticated(authorization)
         if n < 1 or n > 4:
             raise HTTPException(status_code=400, detail={"error": "n must be between 1 and 4"})
         _ensure_user_quota_or_raise(context, n)
         normalized_delivery_mode = _resolve_delivery_mode(context, delivery_mode)
+        response_options = normalize_image_response_options(
+            upstream_endpoint,
+            response_canvas,
+            response_resolution,
+            response_quality,
+        )
 
         uploads = [*(image or []), *(image_list or [])]
         if not uploads:
@@ -844,7 +897,8 @@ def create_app() -> FastAPI:
                 response_format,
                 base_url,
                 normalized_delivery_mode,
-                size,
+                normalize_image_size(size),
+                response_options,
             )
         except ImageGenerationError as exc:
             raise HTTPException(status_code=502, detail={"error": str(exc)}) from exc
@@ -873,7 +927,11 @@ def create_app() -> FastAPI:
             model: str = Form(default="auto"),
             n: int = Form(default=1),
             delivery_mode: str = Form(default="image_bed"),
-            size: str = Form(default="1:1"),
+            size: str = Form(default=DEFAULT_IMAGE_SIZE),
+            upstream_endpoint: str = Form(default=DEFAULT_IMAGE_UPSTREAM_ENDPOINT),
+            response_canvas: str = Form(default=DEFAULT_RESPONSE_CANVAS),
+            response_resolution: str = Form(default=DEFAULT_RESPONSE_RESOLUTION),
+            response_quality: str = Form(default=DEFAULT_RESPONSE_QUALITY),
     ):
         context = auth_service.require_authenticated(authorization)
         normalized_delivery_mode = _resolve_delivery_mode(context, delivery_mode)
@@ -882,6 +940,12 @@ def create_app() -> FastAPI:
         if n < 1 or n > 4:
             raise HTTPException(status_code=400, detail={"error": "n must be between 1 and 4"})
         normalized_mode = "edit" if mode == "edit" else "generate"
+        response_options = normalize_image_response_options(
+            upstream_endpoint,
+            response_canvas,
+            response_resolution,
+            response_quality,
+        )
         _ensure_user_quota_or_raise(context, n)
         owner_role, user_id = _resolve_image_job_owner(context)
         user = context.user or {}
@@ -905,7 +969,11 @@ def create_app() -> FastAPI:
             mode=normalized_mode,
             model=model,
             count=n,
-            size=size,
+            size=normalize_image_size(size),
+            upstream_endpoint=response_options.upstream_endpoint,
+            response_canvas=response_options.canvas,
+            response_resolution=response_options.resolution,
+            response_quality=response_options.quality,
             reference_images=[],
         )
 

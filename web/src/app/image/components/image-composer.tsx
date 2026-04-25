@@ -9,6 +9,18 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  IMAGE_RESPONSE_CANVAS_OPTIONS,
+  IMAGE_RESPONSE_QUALITY_OPTIONS,
+  IMAGE_RESPONSE_RESOLUTION_OPTIONS,
+  IMAGE_SIZE_LABELS,
+  IMAGE_SIZE_OPTIONS,
+  IMAGE_UPSTREAM_ENDPOINT_OPTIONS,
+  type ImageResponseCanvas,
+  type ImageResponseQuality,
+  type ImageResponseResolution,
+  type ImageUpstreamEndpoint,
+} from "@/lib/image-generation-options";
 import type { ImageDeliveryMode } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import type { ImageConversationMode } from "@/store/image-conversations";
@@ -18,6 +30,10 @@ type ImageComposerProps = {
   prompt: string;
   imageCount: string;
   imageSize: string;
+  upstreamEndpoint: ImageUpstreamEndpoint;
+  responseCanvas: ImageResponseCanvas;
+  responseResolution: ImageResponseResolution;
+  responseQuality: ImageResponseQuality;
   deliveryMode: ImageDeliveryMode;
   availableDeliveryModes: ImageDeliveryMode[];
   showAllDeliveryModes?: boolean;
@@ -29,6 +45,10 @@ type ImageComposerProps = {
   onPromptChange: (value: string) => void;
   onImageCountChange: (value: string) => void;
   onImageSizeChange: (value: string) => void;
+  onUpstreamEndpointChange: (value: ImageUpstreamEndpoint) => void;
+  onResponseCanvasChange: (value: ImageResponseCanvas) => void;
+  onResponseResolutionChange: (value: ImageResponseResolution) => void;
+  onResponseQualityChange: (value: ImageResponseQuality) => void;
   onDeliveryModeChange: (value: ImageDeliveryMode) => void;
   onSubmit: () => void | Promise<void>;
   onPickReferenceImage: () => void;
@@ -41,6 +61,10 @@ export function ImageComposer({
   prompt,
   imageCount,
   imageSize,
+  upstreamEndpoint,
+  responseCanvas,
+  responseResolution,
+  responseQuality,
   deliveryMode,
   availableDeliveryModes,
   showAllDeliveryModes = false,
@@ -52,6 +76,10 @@ export function ImageComposer({
   onPromptChange,
   onImageCountChange,
   onImageSizeChange,
+  onUpstreamEndpointChange,
+  onResponseCanvasChange,
+  onResponseResolutionChange,
+  onResponseQualityChange,
   onDeliveryModeChange,
   onSubmit,
   onPickReferenceImage,
@@ -70,6 +98,7 @@ export function ImageComposer({
     () => referenceImages.map((image, index) => ({ id: `${image.name}-${index}`, src: image.dataUrl })),
     [referenceImages],
   );
+  const isResponseEndpoint = upstreamEndpoint === "response";
 
   const handleTextareaPaste = (event: ClipboardEvent<HTMLTextAreaElement>) => {
     const imageFiles = Array.from(event.clipboardData.files).filter((file) => file.type.startsWith("image/"));
@@ -88,15 +117,7 @@ export function ImageComposer({
         ? "图床模式暂未就绪，请先在存储桶管理中完成 COS 配置"
         : "直接传输图片，耗时较久";
 
-  const settingsSummary = `${mode === "edit" ? "图生图" : "文生图"} · ${imageCount || "1"} 张${visibleDeliveryModes.length > 1 ? ` · ${deliveryMode === "image_bed" ? "图床" : "直传"}` : ""}`;
-  const imageSizeOptions = ["1:1", "16:9", "4:3", "3:4", "9:16"];
-  const imageSizeLabels: Record<string, string> = {
-    "1:1": "1:1（正方形）",
-    "16:9": "16:9（横版）",
-    "4:3": "4:3（横版）",
-    "3:4": "3:4（竖版）",
-    "9:16": "9:16（竖版）",
-  };
+  const settingsSummary = `${mode === "edit" ? "图生图" : "文生图"} · ${imageCount || "1"} 张 · ${isResponseEndpoint ? "/response" : "/conversation"}${visibleDeliveryModes.length > 1 ? ` · ${deliveryMode === "image_bed" ? "图床" : "直传"}` : ""}`;
 
   return (
     <div className="shrink-0 flex justify-center">
@@ -222,7 +243,23 @@ export function ImageComposer({
                         <DialogDescription>{settingsSummary}</DialogDescription>
                       </DialogHeader>
 
-                      <div className="flex flex-col gap-5">
+                        <div className="flex flex-col gap-5">
+                        <div className="flex items-center justify-between gap-3 rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3">
+                          <span className="text-sm font-medium text-stone-700">上游端点</span>
+                          <Select value={upstreamEndpoint} onValueChange={(value) => onUpstreamEndpointChange(value as ImageUpstreamEndpoint)}>
+                            <SelectTrigger className="h-9 min-w-[160px] rounded-full border-stone-200 bg-white px-3 text-sm font-medium text-stone-700 shadow-none focus-visible:ring-0">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {IMAGE_UPSTREAM_ENDPOINT_OPTIONS.map((option) => (
+                                <SelectItem key={option.value} value={option.value}>
+                                  {option.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+
                         <div className="flex items-center justify-between gap-3 rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3">
                           <span className="text-sm font-medium text-stone-700">生成张数</span>
                           <Input
@@ -236,27 +273,74 @@ export function ImageComposer({
                           />
                         </div>
 
-                        <div className="flex items-center justify-between gap-3 rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3">
-                          <span className="text-sm font-medium text-stone-700">图片比例</span>
-                          <Select
-                            value={imageSize}
-                            onValueChange={onImageSizeChange}
-                          >
-                            <SelectTrigger
-                              className="h-9 min-w-[140px] rounded-full border-stone-200 bg-white px-3 text-sm font-medium text-stone-700 shadow-none focus-visible:ring-0"
-                              onClick={(event) => event.stopPropagation()}
-                            >
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {imageSizeOptions.map((option) => (
-                                <SelectItem key={option} value={option}>
-                                  {imageSizeLabels[option] || option}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
+                        {isResponseEndpoint ? (
+                          <>
+                            <div className="flex items-center justify-between gap-3 rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3">
+                              <span className="text-sm font-medium text-stone-700">画布</span>
+                              <Select value={responseCanvas} onValueChange={(value) => onResponseCanvasChange(value as ImageResponseCanvas)}>
+                                <SelectTrigger className="h-9 min-w-[140px] rounded-full border-stone-200 bg-white px-3 text-sm font-medium text-stone-700 shadow-none focus-visible:ring-0">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {IMAGE_RESPONSE_CANVAS_OPTIONS.map((option) => (
+                                    <SelectItem key={option.value} value={option.value}>
+                                      {option.label}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="flex items-center justify-between gap-3 rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3">
+                              <span className="text-sm font-medium text-stone-700">分辨率</span>
+                              <Select value={responseResolution} onValueChange={(value) => onResponseResolutionChange(value as ImageResponseResolution)}>
+                                <SelectTrigger className="h-9 min-w-[148px] rounded-full border-stone-200 bg-white px-3 text-sm font-medium text-stone-700 shadow-none focus-visible:ring-0">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {IMAGE_RESPONSE_RESOLUTION_OPTIONS.map((option) => (
+                                    <SelectItem key={option.value} value={option.value}>
+                                      {option.label}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="flex items-center justify-between gap-3 rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3">
+                              <span className="text-sm font-medium text-stone-700">质量</span>
+                              <Select value={responseQuality} onValueChange={(value) => onResponseQualityChange(value as ImageResponseQuality)}>
+                                <SelectTrigger className="h-9 min-w-[132px] rounded-full border-stone-200 bg-white px-3 text-sm font-medium text-stone-700 shadow-none focus-visible:ring-0">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {IMAGE_RESPONSE_QUALITY_OPTIONS.map((option) => (
+                                    <SelectItem key={option.value} value={option.value}>
+                                      {option.label}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </>
+                        ) : (
+                          <div className="flex items-center justify-between gap-3 rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3">
+                            <span className="text-sm font-medium text-stone-700">图片比例</span>
+                            <Select value={imageSize} onValueChange={onImageSizeChange}>
+                              <SelectTrigger
+                                className="h-9 min-w-[140px] rounded-full border-stone-200 bg-white px-3 text-sm font-medium text-stone-700 shadow-none focus-visible:ring-0"
+                                onClick={(event) => event.stopPropagation()}
+                              >
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {IMAGE_SIZE_OPTIONS.map((option) => (
+                                  <SelectItem key={option} value={option}>
+                                    {IMAGE_SIZE_LABELS[option] || option}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        )}
 
                         {visibleDeliveryModes.length > 1 ? (
                           <div className="flex flex-col gap-3 rounded-2xl border border-stone-200 bg-stone-50 px-4 py-4">
@@ -302,6 +386,21 @@ export function ImageComposer({
                   </Dialog>
 
                   <div className="hidden items-center gap-2 rounded-full border border-stone-200 bg-white px-3 py-1 sm:flex">
+                    <span className="text-sm font-medium text-stone-700">端点</span>
+                    <Select value={upstreamEndpoint} onValueChange={(value) => onUpstreamEndpointChange(value as ImageUpstreamEndpoint)}>
+                      <SelectTrigger className="h-8 min-w-[132px] gap-1 rounded-full border-0 bg-transparent px-0 text-sm font-medium text-stone-700 shadow-none focus-visible:ring-0">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {IMAGE_UPSTREAM_ENDPOINT_OPTIONS.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="hidden items-center gap-2 rounded-full border border-stone-200 bg-white px-3 py-1 sm:flex">
                     <span className="text-sm font-medium text-stone-700">张数</span>
                     <Input
                       type="number"
@@ -313,27 +412,74 @@ export function ImageComposer({
                       className="h-8 w-[64px] border-0 bg-transparent px-0 text-center text-sm font-medium text-stone-700 shadow-none focus-visible:ring-0"
                     />
                   </div>
-                  <div className="hidden items-center gap-2 rounded-full border border-stone-200 bg-white px-3 py-1 sm:flex">
-                    <span className="text-sm font-medium text-stone-700">比例</span>
-                    <Select
-                      value={imageSize}
-                      onValueChange={onImageSizeChange}
-                    >
-                      <SelectTrigger
-                        className="h-8 min-w-[120px] gap-1 rounded-full border-0 bg-transparent px-0 text-sm font-medium text-stone-700 shadow-none focus-visible:ring-0"
-                        onClick={(event) => event.stopPropagation()}
-                      >
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {imageSizeOptions.map((option) => (
-                          <SelectItem key={option} value={option}>
-                            {imageSizeLabels[option] || option}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                  {isResponseEndpoint ? (
+                    <>
+                      <div className="hidden items-center gap-2 rounded-full border border-stone-200 bg-white px-3 py-1 sm:flex">
+                        <span className="text-sm font-medium text-stone-700">画布</span>
+                        <Select value={responseCanvas} onValueChange={(value) => onResponseCanvasChange(value as ImageResponseCanvas)}>
+                          <SelectTrigger className="h-8 min-w-[120px] gap-1 rounded-full border-0 bg-transparent px-0 text-sm font-medium text-stone-700 shadow-none focus-visible:ring-0">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {IMAGE_RESPONSE_CANVAS_OPTIONS.map((option) => (
+                              <SelectItem key={option.value} value={option.value}>
+                                {option.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="hidden items-center gap-2 rounded-full border border-stone-200 bg-white px-3 py-1 sm:flex">
+                        <span className="text-sm font-medium text-stone-700">分辨率</span>
+                        <Select value={responseResolution} onValueChange={(value) => onResponseResolutionChange(value as ImageResponseResolution)}>
+                          <SelectTrigger className="h-8 min-w-[130px] gap-1 rounded-full border-0 bg-transparent px-0 text-sm font-medium text-stone-700 shadow-none focus-visible:ring-0">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {IMAGE_RESPONSE_RESOLUTION_OPTIONS.map((option) => (
+                              <SelectItem key={option.value} value={option.value}>
+                                {option.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="hidden items-center gap-2 rounded-full border border-stone-200 bg-white px-3 py-1 sm:flex">
+                        <span className="text-sm font-medium text-stone-700">质量</span>
+                        <Select value={responseQuality} onValueChange={(value) => onResponseQualityChange(value as ImageResponseQuality)}>
+                          <SelectTrigger className="h-8 min-w-[96px] gap-1 rounded-full border-0 bg-transparent px-0 text-sm font-medium text-stone-700 shadow-none focus-visible:ring-0">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {IMAGE_RESPONSE_QUALITY_OPTIONS.map((option) => (
+                              <SelectItem key={option.value} value={option.value}>
+                                {option.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="hidden items-center gap-2 rounded-full border border-stone-200 bg-white px-3 py-1 sm:flex">
+                      <span className="text-sm font-medium text-stone-700">比例</span>
+                      <Select value={imageSize} onValueChange={onImageSizeChange}>
+                        <SelectTrigger
+                          className="h-8 min-w-[120px] gap-1 rounded-full border-0 bg-transparent px-0 text-sm font-medium text-stone-700 shadow-none focus-visible:ring-0"
+                          onClick={(event) => event.stopPropagation()}
+                        >
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {IMAGE_SIZE_OPTIONS.map((option) => (
+                            <SelectItem key={option} value={option}>
+                              {IMAGE_SIZE_LABELS[option] || option}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
                   {visibleDeliveryModes.length > 1 ? (
                     <div className="hidden flex-col gap-1 sm:flex">
                       <div className="flex items-center gap-2">

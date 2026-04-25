@@ -17,6 +17,7 @@ from services.account_service import account_service
 from services import proof_of_work
 from services.config import config
 from services.cos_storage_service import build_signed_download_url, get_image_url_expires_at_iso, upload_file_and_verify
+from services.image_options import ALLOWED_IMAGE_SIZES, normalize_image_size
 from services.proxy_service import proxy_settings
 
 
@@ -28,7 +29,6 @@ USER_AGENT = (
 )
 DEFAULT_MODEL = "auto"
 MAX_POW_ATTEMPTS = 500000
-ALLOWED_IMAGE_SIZES = {"1:1", "16:9", "9:16", "4:3", "3:4"}
 
 _CORES = [16, 24, 32]
 _SCREENS = [3000, 4000, 6000]
@@ -242,7 +242,7 @@ def is_token_invalid_error(message: str) -> bool:
 
 
 def _normalize_image_size(size: object) -> str | None:
-    value = str(size or "").strip()
+    value = normalize_image_size(size)
     return value if value in ALLOWED_IMAGE_SIZES else None
 
 

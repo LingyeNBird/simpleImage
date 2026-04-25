@@ -1,4 +1,10 @@
 import { httpRequest } from "@/lib/request";
+import type {
+  ImageResponseCanvas,
+  ImageResponseQuality,
+  ImageResponseResolution,
+  ImageUpstreamEndpoint,
+} from "@/lib/image-generation-options";
 
 export type AccountType = "Free" | "Plus" | "ProLite" | "Pro" | "Team";
 export type AccountStatus = "正常" | "限流" | "异常" | "禁用";
@@ -42,6 +48,10 @@ export type ImageJob = {
   model: ImageModel;
   count: number;
   size?: string;
+  upstream_endpoint?: ImageUpstreamEndpoint;
+  response_canvas?: ImageResponseCanvas;
+  response_resolution?: ImageResponseResolution;
+  response_quality?: ImageResponseQuality;
   status: "queued" | "running" | "success" | "error";
   delivery_mode: "image_bed";
   created_at: string;
@@ -325,6 +335,10 @@ export async function generateImage(
   model?: ImageModel,
   size: string = "1:1",
   deliveryMode: ImageDeliveryMode = "direct",
+  upstreamEndpoint: ImageUpstreamEndpoint = "conversation",
+  responseCanvas: ImageResponseCanvas = "auto",
+  responseResolution: ImageResponseResolution = "auto",
+  responseQuality: ImageResponseQuality = "auto",
 ) {
   return httpRequest<{ created: number; data: Array<{ b64_json?: string; url?: string; object_key?: string; url_expires_at?: string; revised_prompt?: string; storage?: string }> }>(
     "/v1/images/generations",
@@ -337,6 +351,10 @@ export async function generateImage(
         n: 1,
         response_format: "b64_json",
         delivery_mode: deliveryMode,
+        upstream_endpoint: upstreamEndpoint,
+        response_canvas: responseCanvas,
+        response_resolution: responseResolution,
+        response_quality: responseQuality,
       },
     },
   );
@@ -348,6 +366,10 @@ export async function editImage(
   model?: ImageModel,
   size: string = "1:1",
   deliveryMode: ImageDeliveryMode = "direct",
+  upstreamEndpoint: ImageUpstreamEndpoint = "conversation",
+  responseCanvas: ImageResponseCanvas = "auto",
+  responseResolution: ImageResponseResolution = "auto",
+  responseQuality: ImageResponseQuality = "auto",
 ) {
   const formData = new FormData();
   const uploadFiles = Array.isArray(files) ? files : [files];
@@ -362,6 +384,10 @@ export async function editImage(
   formData.append("size", size);
   formData.append("n", "1");
   formData.append("delivery_mode", deliveryMode);
+  formData.append("upstream_endpoint", upstreamEndpoint);
+  formData.append("response_canvas", responseCanvas);
+  formData.append("response_resolution", responseResolution);
+  formData.append("response_quality", responseQuality);
 
   return httpRequest<{ created: number; data: Array<{ b64_json?: string; url?: string; object_key?: string; url_expires_at?: string; revised_prompt?: string; storage?: string }> }>(
     "/v1/images/edits",
@@ -447,6 +473,10 @@ export async function createImageJob(payload: {
   mode: "generate" | "edit";
   imageCount: number;
   imageSize?: string;
+  upstreamEndpoint?: ImageUpstreamEndpoint;
+  responseCanvas?: ImageResponseCanvas;
+  responseResolution?: ImageResponseResolution;
+  responseQuality?: ImageResponseQuality;
   model?: ImageModel;
   files?: File[];
 }) {
@@ -458,6 +488,10 @@ export async function createImageJob(payload: {
   formData.append("model", payload.model || "auto");
   formData.append("n", String(payload.imageCount));
   formData.append("size", payload.imageSize || "1:1");
+  formData.append("upstream_endpoint", payload.upstreamEndpoint || "conversation");
+  formData.append("response_canvas", payload.responseCanvas || "auto");
+  formData.append("response_resolution", payload.responseResolution || "auto");
+  formData.append("response_quality", payload.responseQuality || "auto");
   formData.append("delivery_mode", "image_bed");
   for (const file of payload.files || []) {
     formData.append("image", file);

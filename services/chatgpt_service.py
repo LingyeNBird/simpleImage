@@ -5,6 +5,8 @@ from typing import Iterable
 from fastapi import HTTPException
 
 from services.account_service import AccountService
+from services.image_options import ImageResponseOptions, normalize_image_response_options
+from services.image_response_service import edit_image_result_via_responses, generate_image_result_via_responses
 from services.image_service import ImageGenerationError, edit_image_result, generate_image_result, is_token_invalid_error
 from services.utils import (
     build_chat_image_completion,
@@ -53,6 +55,7 @@ class ChatGPTService:
         base_url: str | None = None,
         delivery_mode: str = "direct",
         size: str | None = None,
+        response_options: ImageResponseOptions | None = None,
     ):
         created = None
         image_items: list[dict[str, object]] = []
@@ -67,7 +70,19 @@ class ChatGPTService:
 
                 print(f"[image-generate] start pooled token={request_token[:12]}... model={model} index={index}/{n}")
                 try:
-                    result = generate_image_result(request_token, prompt, model, response_format, base_url, delivery_mode, size)
+                    normalized_response_options = response_options or normalize_image_response_options(None, None, None, None)
+                    if normalized_response_options.upstream_endpoint == "response":
+                        result = generate_image_result_via_responses(
+                            request_token,
+                            prompt,
+                            model,
+                            response_format,
+                            base_url,
+                            delivery_mode,
+                            normalized_response_options,
+                        )
+                    else:
+                        result = generate_image_result(request_token, prompt, model, response_format, base_url, delivery_mode, size)
                     account = self.account_service.mark_image_result(request_token, success=True)
                     if created is None:
                         created = result.get("created")
@@ -110,6 +125,7 @@ class ChatGPTService:
         base_url: str | None = None,
         delivery_mode: str = "direct",
         size: str | None = None,
+        response_options: ImageResponseOptions | None = None,
     ):
         created = None
         image_items: list[dict[str, object]] = []
@@ -130,16 +146,29 @@ class ChatGPTService:
                     f"model={model} index={index}/{n} images={len(normalized_images)}"
                 )
                 try:
-                    result = edit_image_result(
-                        request_token,
-                        prompt,
-                        normalized_images,
-                        model,
-                        response_format,
-                        base_url,
-                        delivery_mode,
-                        size,
-                    )
+                    normalized_response_options = response_options or normalize_image_response_options(None, None, None, None)
+                    if normalized_response_options.upstream_endpoint == "response":
+                        result = edit_image_result_via_responses(
+                            request_token,
+                            prompt,
+                            normalized_images,
+                            model,
+                            response_format,
+                            base_url,
+                            delivery_mode,
+                            normalized_response_options,
+                        )
+                    else:
+                        result = edit_image_result(
+                            request_token,
+                            prompt,
+                            normalized_images,
+                            model,
+                            response_format,
+                            base_url,
+                            delivery_mode,
+                            size,
+                        )
                     account = self.account_service.mark_image_result(request_token, success=True)
                     if created is None:
                         created = result.get("created")

@@ -9,6 +9,14 @@ from threading import Lock, Thread
 from typing import Callable, Mapping
 
 from services.config import DATA_DIR
+from services.image_options import (
+    DEFAULT_IMAGE_UPSTREAM_ENDPOINT,
+    DEFAULT_RESPONSE_CANVAS,
+    DEFAULT_RESPONSE_QUALITY,
+    DEFAULT_RESPONSE_RESOLUTION,
+    normalize_image_response_options,
+    normalize_image_size,
+)
 
 
 IMAGE_JOBS_FILE = DATA_DIR / "image_jobs.json"
@@ -77,6 +85,12 @@ def _normalize_job(raw: object) -> dict[str, object] | None:
     status = str(raw.get("status") or "queued").strip() or "queued"
     if status in {"running"}:
         status = "queued"
+    response_options = normalize_image_response_options(
+        raw.get("upstream_endpoint"),
+        raw.get("response_canvas"),
+        raw.get("response_resolution"),
+        raw.get("response_quality"),
+    )
     return {
         "id": job_id,
         "owner_role": str(raw.get("owner_role") or "user").strip() or "user",
@@ -88,7 +102,11 @@ def _normalize_job(raw: object) -> dict[str, object] | None:
         "mode": "edit" if str(raw.get("mode") or "").strip() == "edit" else "generate",
         "model": str(raw.get("model") or "auto").strip() or "auto",
         "count": max(1, _safe_int(raw.get("count"), 1)),
-        "size": str(raw.get("size") or "1:1").strip() or "1:1",
+        "size": normalize_image_size(raw.get("size")),
+        "upstream_endpoint": response_options.upstream_endpoint,
+        "response_canvas": response_options.canvas,
+        "response_resolution": response_options.resolution,
+        "response_quality": response_options.quality,
         "status": status,
         "delivery_mode": "image_bed",
         "created_at": str(raw.get("created_at") or _now_iso()).strip() or _now_iso(),
@@ -172,8 +190,18 @@ class ImageJobService:
         model: str,
         count: int,
         size: str,
+        upstream_endpoint: str = DEFAULT_IMAGE_UPSTREAM_ENDPOINT,
+        response_canvas: str = DEFAULT_RESPONSE_CANVAS,
+        response_resolution: str = DEFAULT_RESPONSE_RESOLUTION,
+        response_quality: str = DEFAULT_RESPONSE_QUALITY,
         reference_images: list[dict[str, object]],
     ) -> dict[str, object]:
+        response_options = normalize_image_response_options(
+            upstream_endpoint,
+            response_canvas,
+            response_resolution,
+            response_quality,
+        )
         now = _now_iso()
         job = {
             "id": uuid.uuid4().hex,
@@ -186,7 +214,11 @@ class ImageJobService:
             "mode": "edit" if mode == "edit" else "generate",
             "model": str(model or "auto").strip() or "auto",
             "count": max(1, int(count or 1)),
-            "size": str(size or "1:1").strip() or "1:1",
+            "size": normalize_image_size(size),
+            "upstream_endpoint": response_options.upstream_endpoint,
+            "response_canvas": response_options.canvas,
+            "response_resolution": response_options.resolution,
+            "response_quality": response_options.quality,
             "status": "queued",
             "delivery_mode": "image_bed",
             "created_at": now,

@@ -14,6 +14,23 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  ACTIVE_CONVERSATION_STORAGE_KEY,
+  DEFAULT_IMAGE_RESPONSE_CANVAS,
+  DEFAULT_IMAGE_RESPONSE_QUALITY,
+  DEFAULT_IMAGE_RESPONSE_RESOLUTION,
+  DEFAULT_IMAGE_SIZE,
+  DEFAULT_IMAGE_UPSTREAM_ENDPOINT,
+  IMAGE_RESPONSE_CANVAS_STORAGE_KEY,
+  IMAGE_RESPONSE_QUALITY_STORAGE_KEY,
+  IMAGE_RESPONSE_RESOLUTION_STORAGE_KEY,
+  IMAGE_SIZE_STORAGE_KEY,
+  IMAGE_UPSTREAM_ENDPOINT_STORAGE_KEY,
+  type ImageResponseCanvas,
+  type ImageResponseQuality,
+  type ImageResponseResolution,
+  type ImageUpstreamEndpoint,
+} from "@/lib/image-generation-options";
+import {
   createImageJob,
   editImage,
   fetchCurrentIdentity,
@@ -38,9 +55,6 @@ import {
   type StoredReferenceImage,
 } from "@/store/image-conversations";
 import { getStoredAuthSession } from "@/store/auth";
-
-const ACTIVE_CONVERSATION_STORAGE_KEY = "chatgpt2api:image_active_conversation_id";
-const IMAGE_SIZE_STORAGE_KEY = "chatgpt2api:image_last_size";
 const activeConversationQueueIds = new Set<string>();
 
 function buildConversationTitle(prompt: string) {
@@ -171,9 +185,19 @@ function buildConversationFromImageJob(job: ImageJob): ImageConversation {
         model: job.model,
         mode: job.mode,
         deliveryMode: "image_bed",
+        upstreamEndpoint: job.upstream_endpoint === "response" ? "response" : "conversation",
+        responseCanvas: job.response_canvas === "opaque" || job.response_canvas === "transparent" ? job.response_canvas : "auto",
+        responseResolution:
+          job.response_resolution === "1024x1024" || job.response_resolution === "1536x1024" || job.response_resolution === "1024x1536"
+            ? job.response_resolution
+            : "auto",
+        responseQuality:
+          job.response_quality === "low" || job.response_quality === "medium" || job.response_quality === "high"
+            ? job.response_quality
+            : "auto",
         referenceImages: [],
         count: job.count,
-        size: job.size || "1:1",
+        size: job.size || DEFAULT_IMAGE_SIZE,
         images:
           job.status === "success"
             ? job.result_images.map((image) => ({
@@ -307,7 +331,11 @@ export default function ImagePage() {
   const [guardReady, setGuardReady] = useState(false);
   const [imagePrompt, setImagePrompt] = useState("");
   const [imageCount, setImageCount] = useState("1");
-  const [imageSize, setImageSize] = useState("1:1");
+  const [imageSize, setImageSize] = useState(DEFAULT_IMAGE_SIZE);
+  const [upstreamEndpoint, setUpstreamEndpoint] = useState<ImageUpstreamEndpoint>(DEFAULT_IMAGE_UPSTREAM_ENDPOINT);
+  const [responseCanvas, setResponseCanvas] = useState<ImageResponseCanvas>(DEFAULT_IMAGE_RESPONSE_CANVAS);
+  const [responseResolution, setResponseResolution] = useState<ImageResponseResolution>(DEFAULT_IMAGE_RESPONSE_RESOLUTION);
+  const [responseQuality, setResponseQuality] = useState<ImageResponseQuality>(DEFAULT_IMAGE_RESPONSE_QUALITY);
   const [imageMode, setImageMode] = useState<ImageConversationMode>("generate");
   const [referenceImageFiles, setReferenceImageFiles] = useState<File[]>([]);
   const [referenceImages, setReferenceImages] = useState<StoredReferenceImage[]>([]);
@@ -419,14 +447,40 @@ export default function ImagePage() {
     let cancelled = false;
 
     const loadHistory = async () => {
-      try {
-        if (typeof window !== "undefined") {
-          const storedImageSize = window.localStorage.getItem(IMAGE_SIZE_STORAGE_KEY);
-          if (storedImageSize) {
-            setImageSize(storedImageSize);
+        try {
+          if (typeof window !== "undefined") {
+            const storedImageSize = window.localStorage.getItem(IMAGE_SIZE_STORAGE_KEY);
+            if (storedImageSize) {
+              setImageSize(storedImageSize);
+            }
+            const storedUpstreamEndpoint = window.localStorage.getItem(IMAGE_UPSTREAM_ENDPOINT_STORAGE_KEY);
+            if (storedUpstreamEndpoint === "response" || storedUpstreamEndpoint === "conversation") {
+              setUpstreamEndpoint(storedUpstreamEndpoint);
+            }
+            const storedResponseCanvas = window.localStorage.getItem(IMAGE_RESPONSE_CANVAS_STORAGE_KEY);
+            if (storedResponseCanvas === "opaque" || storedResponseCanvas === "transparent" || storedResponseCanvas === "auto") {
+              setResponseCanvas(storedResponseCanvas);
+            }
+            const storedResponseResolution = window.localStorage.getItem(IMAGE_RESPONSE_RESOLUTION_STORAGE_KEY);
+            if (
+              storedResponseResolution === "1024x1024" ||
+              storedResponseResolution === "1536x1024" ||
+              storedResponseResolution === "1024x1536" ||
+              storedResponseResolution === "auto"
+            ) {
+              setResponseResolution(storedResponseResolution);
+            }
+            const storedResponseQuality = window.localStorage.getItem(IMAGE_RESPONSE_QUALITY_STORAGE_KEY);
+            if (
+              storedResponseQuality === "low" ||
+              storedResponseQuality === "medium" ||
+              storedResponseQuality === "high" ||
+              storedResponseQuality === "auto"
+            ) {
+              setResponseQuality(storedResponseQuality);
+            }
           }
-        }
-        const items = await listImageConversations();
+          const items = await listImageConversations();
         const normalizedItems = await recoverConversationHistory(items);
         if (cancelled) {
           return;
@@ -530,8 +584,40 @@ export default function ImagePage() {
       return;
     }
 
-    window.localStorage.setItem(IMAGE_SIZE_STORAGE_KEY, imageSize || "1:1");
+    window.localStorage.setItem(IMAGE_SIZE_STORAGE_KEY, imageSize || DEFAULT_IMAGE_SIZE);
   }, [imageSize]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    window.localStorage.setItem(IMAGE_UPSTREAM_ENDPOINT_STORAGE_KEY, upstreamEndpoint);
+  }, [upstreamEndpoint]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    window.localStorage.setItem(IMAGE_RESPONSE_CANVAS_STORAGE_KEY, responseCanvas);
+  }, [responseCanvas]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    window.localStorage.setItem(IMAGE_RESPONSE_RESOLUTION_STORAGE_KEY, responseResolution);
+  }, [responseResolution]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    window.localStorage.setItem(IMAGE_RESPONSE_QUALITY_STORAGE_KEY, responseQuality);
+  }, [responseQuality]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -818,8 +904,27 @@ export default function ImagePage() {
           try {
             const data =
               queuedTurn.mode === "edit"
-                ? await editImage(referenceFiles, queuedTurn.prompt, queuedTurn.model, queuedTurn.size, queuedTurn.deliveryMode)
-                : await generateImage(queuedTurn.prompt, queuedTurn.model, queuedTurn.size, queuedTurn.deliveryMode);
+                ? await editImage(
+                    referenceFiles,
+                    queuedTurn.prompt,
+                    queuedTurn.model,
+                    queuedTurn.size,
+                    queuedTurn.deliveryMode,
+                    queuedTurn.upstreamEndpoint,
+                    queuedTurn.responseCanvas,
+                    queuedTurn.responseResolution,
+                    queuedTurn.responseQuality,
+                  )
+                : await generateImage(
+                    queuedTurn.prompt,
+                    queuedTurn.model,
+                    queuedTurn.size,
+                    queuedTurn.deliveryMode,
+                    queuedTurn.upstreamEndpoint,
+                    queuedTurn.responseCanvas,
+                    queuedTurn.responseResolution,
+                    queuedTurn.responseQuality,
+                  );
             const first = data.data?.[0];
             if (!first?.b64_json && !first?.url) {
               throw new Error("未返回图片数据");
@@ -988,6 +1093,10 @@ export default function ImagePage() {
       model: "auto",
       mode: imageMode,
       deliveryMode,
+      upstreamEndpoint,
+      responseCanvas,
+      responseResolution,
+      responseQuality,
       referenceImages: imageMode === "edit" ? referenceImages : [],
       count: parsedCount,
       size: imageSize,
@@ -1027,6 +1136,10 @@ export default function ImagePage() {
           mode: imageMode,
           imageCount: parsedCount,
           imageSize,
+          upstreamEndpoint,
+          responseCanvas,
+          responseResolution,
+          responseQuality,
           model: "auto",
           files: imageMode === "edit" ? referenceImageFiles : [],
         });
@@ -1257,6 +1370,10 @@ export default function ImagePage() {
             prompt={imagePrompt}
             imageCount={imageCount}
             imageSize={imageSize}
+            upstreamEndpoint={upstreamEndpoint}
+            responseCanvas={responseCanvas}
+            responseResolution={responseResolution}
+            responseQuality={responseQuality}
             deliveryMode={deliveryMode}
             availableDeliveryModes={availableDeliveryModes}
             showAllDeliveryModes={currentIdentity?.role === "admin"}
@@ -1268,6 +1385,10 @@ export default function ImagePage() {
             onPromptChange={setImagePrompt}
             onImageCountChange={setImageCount}
             onImageSizeChange={setImageSize}
+            onUpstreamEndpointChange={setUpstreamEndpoint}
+            onResponseCanvasChange={setResponseCanvas}
+            onResponseResolutionChange={setResponseResolution}
+            onResponseQualityChange={setResponseQuality}
             onDeliveryModeChange={setDeliveryMode}
             onSubmit={handleSubmit}
             onPickReferenceImage={() => fileInputRef.current?.click()}

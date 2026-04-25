@@ -2,6 +2,12 @@
 
 import localforage from "localforage";
 
+import type {
+  ImageResponseCanvas,
+  ImageResponseQuality,
+  ImageResponseResolution,
+  ImageUpstreamEndpoint,
+} from "@/lib/image-generation-options";
 import type { ImageDeliveryMode, ImageModel } from "@/lib/api";
 
 export type ImageConversationMode = "generate" | "edit";
@@ -31,6 +37,10 @@ export type ImageTurn = {
   model: ImageModel;
   mode: ImageConversationMode;
   deliveryMode: ImageDeliveryMode;
+   upstreamEndpoint: ImageUpstreamEndpoint;
+   responseCanvas: ImageResponseCanvas;
+   responseResolution: ImageResponseResolution;
+   responseQuality: ImageResponseQuality;
   referenceImages: StoredReferenceImage[];
   count: number;
   size: string;
@@ -129,6 +139,16 @@ function normalizeTurn(turn: ImageTurn & Record<string, unknown>): ImageTurn {
     model: (turn.model as ImageModel) || "auto",
     mode: turn.mode === "edit" ? "edit" : "generate",
     deliveryMode: turn.deliveryMode === "image_bed" ? "image_bed" : "direct",
+    upstreamEndpoint: turn.upstreamEndpoint === "response" ? "response" : "conversation",
+    responseCanvas: turn.responseCanvas === "opaque" || turn.responseCanvas === "transparent" ? turn.responseCanvas : "auto",
+    responseResolution:
+      turn.responseResolution === "1024x1024" || turn.responseResolution === "1536x1024" || turn.responseResolution === "1024x1536"
+        ? turn.responseResolution
+        : "auto",
+    responseQuality:
+      turn.responseQuality === "low" || turn.responseQuality === "medium" || turn.responseQuality === "high"
+        ? turn.responseQuality
+        : "auto",
     referenceImages: getLegacyReferenceImages(turn),
     count: Math.max(1, Number(turn.count || normalizedImages.length || 1)),
     size: String(turn.size || "1:1"),
@@ -155,6 +175,23 @@ function normalizeConversation(conversation: ImageConversation & Record<string, 
           model: (conversation.model as ImageModel) || "auto",
           mode: conversation.mode === "edit" ? "edit" : "generate",
           deliveryMode: conversation.deliveryMode === "image_bed" ? "image_bed" : "direct",
+          upstreamEndpoint: conversation.upstreamEndpoint === "response" ? "response" : "conversation",
+          responseCanvas:
+            conversation.responseCanvas === "opaque" || conversation.responseCanvas === "transparent"
+              ? conversation.responseCanvas
+              : "auto",
+          responseResolution:
+            conversation.responseResolution === "1024x1024" ||
+            conversation.responseResolution === "1536x1024" ||
+            conversation.responseResolution === "1024x1536"
+              ? conversation.responseResolution
+              : "auto",
+          responseQuality:
+            conversation.responseQuality === "low" ||
+            conversation.responseQuality === "medium" ||
+            conversation.responseQuality === "high"
+              ? conversation.responseQuality
+              : "auto",
           referenceImages: getLegacyReferenceImages(conversation),
           count: Number(conversation.count || 1),
           size: String(conversation.size || "1:1"),
