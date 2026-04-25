@@ -1,0 +1,50 @@
+version: '3'
+
+vars:
+  IMAGE: lingyenbird/simple-chat2image
+  TAG: '{{default "latest" .TAG}}'
+  PLATFORMS: '{{default "linux/amd64,linux/arm64" .PLATFORMS}}'
+  BUILDER: '{{default "chat2image-multiarch" .BUILDER}}'
+  GH_REPO: LingyeNBird/simpleImage
+  GIT_REF: '{{default "main" .GIT_REF}}'
+
+tasks:
+  docker:buildx:ensure:
+    desc: Ensure a docker-container buildx builder exists
+    status:
+      - docker buildx inspect {{.BUILDER}}
+    cmds:
+      - docker buildx create --name {{.BUILDER}} --driver docker-container --use
+
+  docker:buildx:bootstrap:
+    desc: Bootstrap the multi-platform buildx builder
+    deps:
+      - docker:buildx:ensure
+    cmds:
+      - docker buildx inspect --bootstrap {{.BUILDER}}
+
+  docker:recreate:
+    desc: Pull latest image and recreate containers
+    cmds:
+      - docker compose pull
+      - docker compose up -d --force-recreate
+
+  docker:publish:
+    desc: Build and push Docker Hub image
+    deps:
+      - docker:buildx:bootstrap
+    cmds:
+      - docker buildx build --builder {{.BUILDER}} --platform {{.PLATFORMS}} -t {{.IMAGE}}:{{.TAG}} --push .
+
+  docker:publish-latest:
+    desc: Build and push latest Docker Hub image
+    cmds:
+      - task: docker:publish
+        vars:
+          TAG: latest
+
+  docker:ci-publish:
+    desc: Trigger GitHub Actions to build and push Docker Hub image
+    cmds:
+      - gh workflow run docker-publish.yml --repo {{.GH_REPO}} --ref {{.GIT_REF}} -f image_tag={{.TAG}}
+      - gh run list --repo {{.GH_REPO}} --workflow docker-publish.yml --limit 1

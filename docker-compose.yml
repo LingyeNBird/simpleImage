@@ -1,8 +1,6 @@
 services:
   app:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: lingyenbird/simple-chat2image:latest
     container_name: chatgpt2api
     restart: unless-stopped
     ports:
