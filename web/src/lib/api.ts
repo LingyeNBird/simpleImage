@@ -60,6 +60,20 @@ export type AdminRedeemKey = {
   redeemed_at?: string | null;
 };
 
+export type PromptLibraryItem = {
+  id: string;
+  title: string;
+  prompt: string;
+  tags: string[];
+  owner_role: AuthRole;
+  owner_id: string;
+  owner_name: string;
+  created_at: string;
+  updated_at: string;
+  can_edit: boolean;
+  can_delete: boolean;
+};
+
 type AuthResponse = {
   ok: boolean;
   role: AuthRole;
@@ -392,6 +406,38 @@ export async function testCosConfig() {
 
 export async function fetchImageJobs() {
   return httpRequest<{ items: ImageJob[] }>("/api/image-jobs");
+}
+
+export async function fetchImagePromptLibrary(params?: { search?: string; mine?: boolean }) {
+  const query = new URLSearchParams();
+  if (params?.search?.trim()) {
+    query.set("search", params.search.trim());
+  }
+  if (params?.mine) {
+    query.set("mine", "true");
+  }
+  const suffix = query.size > 0 ? `?${query.toString()}` : "";
+  return httpRequest<{ items: PromptLibraryItem[] }>(`/api/image-prompts${suffix}`);
+}
+
+export async function createImagePrompt(payload: { title?: string; prompt: string; tags: string[] }) {
+  return httpRequest<{ item: PromptLibraryItem }>("/api/image-prompts", {
+    method: "POST",
+    body: payload,
+  });
+}
+
+export async function updateImagePrompt(promptId: string, payload: { title?: string; prompt: string; tags: string[] }) {
+  return httpRequest<{ item: PromptLibraryItem }>(`/api/image-prompts/${promptId}`, {
+    method: "POST",
+    body: payload,
+  });
+}
+
+export async function deleteImagePrompt(promptId: string) {
+  return httpRequest<{ ok: boolean }>(`/api/image-prompts/${promptId}`, {
+    method: "DELETE",
+  });
 }
 
 export async function createImageJob(payload: {
