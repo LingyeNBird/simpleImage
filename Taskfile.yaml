@@ -44,7 +44,8 @@ tasks:
           TAG: latest
 
   docker:ci-publish:
-    desc: Trigger GitHub Actions to build and push Docker Hub image
+    desc: Push git tag to lingye and let GitHub Actions publish image
     cmds:
-      - gh workflow run docker-publish.yml --repo {{.GH_REPO}} --ref {{.GIT_REF}} -f image_tag={{.TAG}}
+      - GIT_MASTER=1 git tag -a {{.TAG}} -m "Release {{.TAG}}"
+      - GIT_MASTER=1 git push lingye refs/tags/{{.TAG}}
       - gh run list --repo {{.GH_REPO}} --workflow docker-publish.yml --limit 1
