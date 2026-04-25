@@ -7,6 +7,7 @@ import { ImageLightbox } from "@/components/image-lightbox";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import type { ImageDeliveryMode } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -89,6 +90,13 @@ export function ImageComposer({
 
   const settingsSummary = `${mode === "edit" ? "图生图" : "文生图"} · ${imageCount || "1"} 张${visibleDeliveryModes.length > 1 ? ` · ${deliveryMode === "image_bed" ? "图床" : "直传"}` : ""}`;
   const imageSizeOptions = ["1:1", "16:9", "4:3", "3:4", "9:16"];
+  const imageSizeLabels: Record<string, string> = {
+    "1:1": "1:1（正方形）",
+    "16:9": "16:9（横版）",
+    "4:3": "4:3（横版）",
+    "3:4": "3:4（竖版）",
+    "9:16": "9:16（竖版）",
+  };
 
   return (
     <div className="shrink-0 flex justify-center">
@@ -172,7 +180,12 @@ export function ImageComposer({
               className="min-h-[148px] resize-none rounded-[32px] border-0 bg-transparent px-6 pt-6 pb-20 text-[15px] leading-7 text-stone-900 shadow-none placeholder:text-stone-400 focus-visible:ring-0"
             />
 
-            <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-white via-white/95 to-transparent px-4 pb-4 pt-6 sm:px-6">
+            <div
+              className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-white via-white/95 to-transparent px-4 pb-4 pt-6 sm:px-6"
+              onClick={(event) => {
+                event.stopPropagation();
+              }}
+            >
               <div className="flex items-end justify-between gap-3">
                 <div className="flex min-w-0 flex-1 flex-wrap items-center gap-3">
                   {mode === "edit" ? (
@@ -225,17 +238,24 @@ export function ImageComposer({
 
                         <div className="flex items-center justify-between gap-3 rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3">
                           <span className="text-sm font-medium text-stone-700">图片比例</span>
-                          <select
+                          <Select
                             value={imageSize}
-                            onChange={(event) => onImageSizeChange(event.target.value)}
-                            className="h-9 min-w-[110px] rounded-full border border-stone-200 bg-white px-3 text-sm font-medium text-stone-700 outline-none"
+                            onValueChange={onImageSizeChange}
                           >
-                            {imageSizeOptions.map((option) => (
-                              <option key={option} value={option}>
-                                {option}
-                              </option>
-                            ))}
-                          </select>
+                            <SelectTrigger
+                              className="h-9 min-w-[140px] rounded-full border-stone-200 bg-white px-3 text-sm font-medium text-stone-700 shadow-none focus-visible:ring-0"
+                              onClick={(event) => event.stopPropagation()}
+                            >
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {imageSizeOptions.map((option) => (
+                                <SelectItem key={option} value={option}>
+                                  {imageSizeLabels[option] || option}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                         </div>
 
                         {visibleDeliveryModes.length > 1 ? (
@@ -295,17 +315,24 @@ export function ImageComposer({
                   </div>
                   <div className="hidden items-center gap-2 rounded-full border border-stone-200 bg-white px-3 py-1 sm:flex">
                     <span className="text-sm font-medium text-stone-700">比例</span>
-                    <select
+                    <Select
                       value={imageSize}
-                      onChange={(event) => onImageSizeChange(event.target.value)}
-                      className="h-8 rounded-full border-0 bg-transparent px-0 text-sm font-medium text-stone-700 outline-none"
+                      onValueChange={onImageSizeChange}
                     >
-                      {imageSizeOptions.map((option) => (
-                        <option key={option} value={option}>
-                          {option}
-                        </option>
-                      ))}
-                    </select>
+                      <SelectTrigger
+                        className="h-8 min-w-[120px] gap-1 rounded-full border-0 bg-transparent px-0 text-sm font-medium text-stone-700 shadow-none focus-visible:ring-0"
+                        onClick={(event) => event.stopPropagation()}
+                      >
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {imageSizeOptions.map((option) => (
+                          <SelectItem key={option} value={option}>
+                            {imageSizeLabels[option] || option}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                   {visibleDeliveryModes.length > 1 ? (
                     <div className="hidden flex-col gap-1 sm:flex">
