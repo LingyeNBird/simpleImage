@@ -31,6 +31,7 @@ from services.sub2api_service import (
 
 from services.image_service import ImageGenerationError
 from services.image_job_service import image_job_service
+from services.prompt_library_service import prompt_library_service
 from services.version import get_app_version
 
 BASE_DIR = Path(__file__).resolve().parents[1]
@@ -190,6 +191,18 @@ class ProxyUpdateRequest(BaseModel):
 
 class ProxyTestRequest(BaseModel):
     url: str = ""
+
+
+class PromptLibraryCreateRequest(BaseModel):
+    title: str = ""
+    prompt: str = Field(..., min_length=1)
+    tags: list[str] = Field(default_factory=list)
+
+
+class PromptLibraryUpdateRequest(BaseModel):
+    title: str = ""
+    prompt: str = Field(..., min_length=1)
+    tags: list[str] = Field(default_factory=list)
 
 
 def build_model_item(model_id: str) -> dict[str, object]:
@@ -449,6 +462,44 @@ def _resolve_image_job_owner(context: AuthContext) -> tuple[str, str]:
     if not user_id:
         raise HTTPException(status_code=401, detail={"error": "authorization is invalid"})
     return "user", user_id
+
+
+def _resolve_prompt_owner(context: AuthContext) -> tuple[str, str, str]:
+    if context.is_admin:
+        return "admin", "admin", "admin"
+    user = context.user or {}
+    user_id = str(user.get("id") or "").strip()
+    username = str(user.get("username") or "").strip()
+    if not user_id or not username:
+        raise HTTPException(status_code=401, detail={"error": "authorization is invalid"})
+    return "user", user_id, username
+
+
+def _can_manage_prompt(context: AuthContext, item: Mapping[str, object]) -> bool:
+    if context.is_admin:
+        return True
+    user = context.user or {}
+    return (
+        str(item.get("owner_role") or "") == "user"
+        and str(item.get("owner_id") or "") == str(user.get("id") or "").strip()
+    )
+
+
+def _sanitize_prompt_library_item(context: AuthContext, item: Mapping[str, object]) -> dict[str, object]:
+    raw_tags = item.get("tags")
+    return {
+        "id": str(item.get("id") or "").strip(),
+        "title": str(item.get("title") or "").strip(),
+        "prompt": str(item.get("prompt") or "").strip(),
+        "tags": [str(tag).strip() for tag in raw_tags if str(tag).strip()] if isinstance(raw_tags, list) else [],
+        "owner_role": str(item.get("owner_role") or "").strip(),
+        "owner_id": str(item.get("owner_id") or "").strip(),
+        "owner_name": str(item.get("owner_name") or "").strip(),
+        "created_at": str(item.get("created_at") or "").strip(),
+        "updated_at": str(item.get("updated_at") or "").strip(),
+        "can_edit": _can_manage_prompt(context, item),
+        "can_delete": _can_manage_prompt(context, item),
+    }
 
 
 def create_app() -> FastAPI:
@@ -961,6 +1012,66 @@ def create_app() -> FastAPI:
     async def list_redeem_keys(authorization: str | None = Header(default=None)):
         auth_service.require_admin(authorization)
         return {"items": user_service.list_redeem_keys()}
+
+    @router.get("/api/image-prompts")
+    async def list_image_prompts(
+            authorization: str | None = Header(default=None),
+            mine: bool = False,
+            search: str = "",
+    ):
+        context = auth_service.require_authenticated(authorization)
+        owner_role, owner_id, _ = _resolve_prompt_owner(context)
+        items = prompt_library_service.list_prompts(mine_only=mine, owner_role=owner_role, owner_id=owner_id, search=search)
+        return {"items": [_sanitize_prompt_library_item(context, item) for item in items]}
+
+    @router.post("/api/image-prompts")
+    async def create_image_prompt(body: PromptLibraryCreateRequest, authorization: str | None = Header(default=None)):
+        context = auth_service.require_authenticated(authorization)
+        owner_role, owner_id, owner_name = _resolve_prompt_owner(context)
+        try:
+            item = prompt_library_service.create_prompt(
+                title=body.title,
+                prompt=body.prompt,
+                tags=body.tags,
+                owner_role=owner_role,
+                owner_id=owner_id,
+                owner_name=owner_name,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail={"error": str(exc)}) from exc
+        return {"item": _sanitize_prompt_library_item(context, item)}
+
+    @router.post("/api/image-prompts/{prompt_id}")
+    async def update_image_prompt(
+            prompt_id: str,
+            body: PromptLibraryUpdateRequest,
+            authorization: str | None = Header(default=None),
+    ):
+        context = auth_service.require_authenticated(authorization)
+        current = prompt_library_service.get_prompt(prompt_id)
+        if current is None:
+            raise HTTPException(status_code=404, detail={"error": "prompt not found"})
+        if not _can_manage_prompt(context, current):
+            raise HTTPException(status_code=403, detail={"error": "forbidden"})
+        try:
+            item = prompt_library_service.update_prompt(prompt_id, title=body.title, prompt=body.prompt, tags=body.tags)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail={"error": str(exc)}) from exc
+        if item is None:
+            raise HTTPException(status_code=404, detail={"error": "prompt not found"})
+        return {"item": _sanitize_prompt_library_item(context, item)}
+
+    @router.delete("/api/image-prompts/{prompt_id}")
+    async def delete_image_prompt(prompt_id: str, authorization: str | None = Header(default=None)):
+        context = auth_service.require_authenticated(authorization)
+        current = prompt_library_service.get_prompt(prompt_id)
+        if current is None:
+            raise HTTPException(status_code=404, detail={"error": "prompt not found"})
+        if not _can_manage_prompt(context, current):
+            raise HTTPException(status_code=403, detail={"error": "forbidden"})
+        if not prompt_library_service.delete_prompt(prompt_id):
+            raise HTTPException(status_code=404, detail={"error": "prompt not found"})
+        return {"ok": True}
 
     # ── CPA multi-pool endpoints ────────────────────────────────────
 
