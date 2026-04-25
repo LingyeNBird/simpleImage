@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import time
 import uuid
+from collections.abc import Mapping
 
 from fastapi import HTTPException
 
@@ -96,11 +97,13 @@ def extract_prompt_from_message_content(content: object) -> str:
     return "\n".join(parts).strip()
 
 
-def extract_image_from_message_content(content: object) -> tuple[bytes, str] | None:
+def extract_images_from_message_content(content: object) -> list[tuple[bytes, str]]:
     import base64 as b64
 
     if not isinstance(content, list):
-        return None
+        return []
+
+    images: list[tuple[bytes, str]] = []
 
     for item in content:
         if not isinstance(item, dict):
@@ -112,20 +115,32 @@ def extract_image_from_message_content(content: object) -> tuple[bytes, str] | N
             if url.startswith("data:"):
                 header, _, data = url.partition(",")
                 mime = header.split(";")[0].removeprefix("data:")
-                return b64.b64decode(data), mime or "image/png"
+                images.append((b64.b64decode(data), mime or "image/png"))
         if item_type == "input_image":
             image_url = str(item.get("image_url") or "")
             if image_url.startswith("data:"):
                 header, _, data = image_url.partition(",")
                 mime = header.split(";")[0].removeprefix("data:")
-                return b64.b64decode(data), mime or "image/png"
-    return None
+                images.append((b64.b64decode(data), mime or "image/png"))
+    return images
+
+
+def extract_image_from_message_content(content: object) -> tuple[bytes, str] | None:
+    images = extract_images_from_message_content(content)
+    return images[0] if images else None
 
 
 def extract_chat_image(body: dict[str, object]) -> tuple[bytes, str] | None:
+    images = extract_chat_images(body)
+    return images[0] if images else None
+
+
+def extract_chat_images(body: dict[str, object]) -> list[tuple[bytes, str]]:
     messages = body.get("messages")
     if not isinstance(messages, list):
-        return None
+        return []
+
+    all_images: list[tuple[bytes, str]] = []
 
     for message in reversed(messages):
         if not isinstance(message, dict):
@@ -133,10 +148,8 @@ def extract_chat_image(body: dict[str, object]) -> tuple[bytes, str] | None:
         role = str(message.get("role") or "").strip().lower()
         if role != "user":
             continue
-        result = extract_image_from_message_content(message.get("content"))
-        if result:
-            return result
-    return None
+        all_images.extend(extract_images_from_message_content(message.get("content")))
+    return all_images
 
 
 def extract_chat_prompt(body: dict[str, object]) -> str:
@@ -164,7 +177,18 @@ def extract_chat_prompt(body: dict[str, object]) -> str:
 
 def parse_image_count(raw_value: object) -> int:
     try:
-        value = int(raw_value or 1)
+        if raw_value is None:
+            value = 1
+        elif isinstance(raw_value, bool):
+            value = int(raw_value)
+        elif isinstance(raw_value, int):
+            value = raw_value
+        elif isinstance(raw_value, float):
+            value = int(raw_value)
+        elif isinstance(raw_value, str):
+            value = int(raw_value.strip() or "1")
+        else:
+            raise TypeError("n must be an integer")
     except (TypeError, ValueError) as exc:
         raise HTTPException(status_code=400, detail={"error": "n must be an integer"}) from exc
     if value < 1 or value > 4:
@@ -175,12 +199,24 @@ def parse_image_count(raw_value: object) -> int:
 def build_chat_image_completion(
     model: str,
     prompt: str,
-    image_result: dict[str, object],
+    image_result: Mapping[str, object],
 ) -> dict[str, object]:
-    created = int(image_result.get("created") or time.time())
-    image_items = image_result.get("data") if isinstance(image_result.get("data"), list) else []
+    created_raw = image_result.get("created")
+    if isinstance(created_raw, bool):
+        created = int(created_raw)
+    elif isinstance(created_raw, int):
+        created = created_raw
+    elif isinstance(created_raw, float):
+        created = int(created_raw)
+    elif isinstance(created_raw, str):
+        created = int(created_raw.strip() or int(time.time()))
+    else:
+        created = int(time.time())
 
-    markdown_images = []
+    image_items_raw = image_result.get("data")
+    image_items = image_items_raw if isinstance(image_items_raw, list) else []
+
+    markdown_images: list[str] = []
 
     for index, item in enumerate(image_items, start=1):
         if not isinstance(item, dict):

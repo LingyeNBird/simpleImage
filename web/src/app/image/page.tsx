@@ -39,6 +39,7 @@ import {
 import { getStoredAuthSession } from "@/store/auth";
 
 const ACTIVE_CONVERSATION_STORAGE_KEY = "chatgpt2api:image_active_conversation_id";
+const IMAGE_SIZE_STORAGE_KEY = "chatgpt2api:image_last_size";
 const activeConversationQueueIds = new Set<string>();
 
 function buildConversationTitle(prompt: string) {
@@ -171,6 +172,7 @@ function buildConversationFromImageJob(job: ImageJob): ImageConversation {
         deliveryMode: "image_bed",
         referenceImages: [],
         count: job.count,
+        size: job.size || "1:1",
         images:
           job.status === "success"
             ? job.result_images.map((image) => ({
@@ -295,6 +297,7 @@ async function recoverConversationHistory(items: ImageConversation[]) {
 export default function ImagePage() {
   const router = useRouter();
   const didLoadQuotaRef = useRef(false);
+  const didApplyMobileImageBedDefaultRef = useRef(false);
   const conversationsRef = useRef<ImageConversation[]>([]);
   const resultsViewportRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -303,6 +306,7 @@ export default function ImagePage() {
   const [guardReady, setGuardReady] = useState(false);
   const [imagePrompt, setImagePrompt] = useState("");
   const [imageCount, setImageCount] = useState("1");
+  const [imageSize, setImageSize] = useState("1:1");
   const [imageMode, setImageMode] = useState<ImageConversationMode>("generate");
   const [referenceImageFiles, setReferenceImageFiles] = useState<File[]>([]);
   const [referenceImages, setReferenceImages] = useState<StoredReferenceImage[]>([]);
@@ -319,6 +323,7 @@ export default function ImagePage() {
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState(0);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  const [isMobileViewport, setIsMobileViewport] = useState(false);
 
   const parsedCount = useMemo(() => Math.max(1, Math.min(10, Number(imageCount) || 1)), [imageCount]);
   const selectedConversation = useMemo(
@@ -346,6 +351,23 @@ export default function ImagePage() {
     const modes = currentIdentity?.image_delivery_modes;
     return modes && modes.length > 0 ? modes : ["direct"];
   }, [currentIdentity]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const mediaQuery = window.matchMedia("(max-width: 639px)");
+    const updateMobileViewport = () => {
+      setIsMobileViewport(mediaQuery.matches);
+    };
+
+    updateMobileViewport();
+    mediaQuery.addEventListener("change", updateMobileViewport);
+    return () => {
+      mediaQuery.removeEventListener("change", updateMobileViewport);
+    };
+  }, []);
 
   useEffect(() => {
     conversationsRef.current = conversations;
@@ -395,6 +417,12 @@ export default function ImagePage() {
 
     const loadHistory = async () => {
       try {
+        if (typeof window !== "undefined") {
+          const storedImageSize = window.localStorage.getItem(IMAGE_SIZE_STORAGE_KEY);
+          if (storedImageSize) {
+            setImageSize(storedImageSize);
+          }
+        }
         const items = await listImageConversations();
         const normalizedItems = await recoverConversationHistory(items);
         if (cancelled) {
@@ -445,6 +473,21 @@ export default function ImagePage() {
   }, [availableDeliveryModes, deliveryMode]);
 
   useEffect(() => {
+    if (!isMobileViewport) {
+      return;
+    }
+    if (didApplyMobileImageBedDefaultRef.current) {
+      return;
+    }
+    if (!availableDeliveryModes.includes("image_bed")) {
+      return;
+    }
+
+    didApplyMobileImageBedDefaultRef.current = true;
+    setDeliveryMode("image_bed");
+  }, [availableDeliveryModes, isMobileViewport]);
+
+  useEffect(() => {
     if (!guardReady) {
       return;
     }
@@ -478,6 +521,14 @@ export default function ImagePage() {
       window.removeEventListener("focus", handleFocus);
     };
   }, [guardReady, loadQuota]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    window.localStorage.setItem(IMAGE_SIZE_STORAGE_KEY, imageSize || "1:1");
+  }, [imageSize]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -764,8 +815,8 @@ export default function ImagePage() {
           try {
             const data =
               queuedTurn.mode === "edit"
-                ? await editImage(referenceFiles, queuedTurn.prompt, queuedTurn.model, queuedTurn.deliveryMode)
-                : await generateImage(queuedTurn.prompt, queuedTurn.model, queuedTurn.deliveryMode);
+                ? await editImage(referenceFiles, queuedTurn.prompt, queuedTurn.model, queuedTurn.size, queuedTurn.deliveryMode)
+                : await generateImage(queuedTurn.prompt, queuedTurn.model, queuedTurn.size, queuedTurn.deliveryMode);
             const first = data.data?.[0];
             if (!first?.b64_json && !first?.url) {
               throw new Error("未返回图片数据");
@@ -936,6 +987,7 @@ export default function ImagePage() {
       deliveryMode,
       referenceImages: imageMode === "edit" ? referenceImages : [],
       count: parsedCount,
+      size: imageSize,
       images: Array.from({ length: parsedCount }, (_, index) => ({
         id: `${turnId}-${index}`,
         status: "loading" as const,
@@ -971,6 +1023,7 @@ export default function ImagePage() {
           conversationTitle,
           mode: imageMode,
           imageCount: parsedCount,
+          imageSize,
           model: "auto",
           files: imageMode === "edit" ? referenceImageFiles : [],
         });
@@ -1165,6 +1218,7 @@ export default function ImagePage() {
             mode={imageMode}
             prompt={imagePrompt}
             imageCount={imageCount}
+            imageSize={imageSize}
             deliveryMode={deliveryMode}
             availableDeliveryModes={availableDeliveryModes}
             showAllDeliveryModes={currentIdentity?.role === "admin"}
@@ -1175,6 +1229,7 @@ export default function ImagePage() {
             onModeChange={setImageMode}
             onPromptChange={setImagePrompt}
             onImageCountChange={setImageCount}
+            onImageSizeChange={setImageSize}
             onDeliveryModeChange={setDeliveryMode}
             onSubmit={handleSubmit}
             onPickReferenceImage={() => fileInputRef.current?.click()}

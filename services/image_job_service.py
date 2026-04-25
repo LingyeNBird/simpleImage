@@ -88,6 +88,7 @@ def _normalize_job(raw: object) -> dict[str, object] | None:
         "mode": "edit" if str(raw.get("mode") or "").strip() == "edit" else "generate",
         "model": str(raw.get("model") or "auto").strip() or "auto",
         "count": max(1, _safe_int(raw.get("count"), 1)),
+        "size": str(raw.get("size") or "1:1").strip() or "1:1",
         "status": status,
         "delivery_mode": "image_bed",
         "created_at": str(raw.get("created_at") or _now_iso()).strip() or _now_iso(),
@@ -170,6 +171,7 @@ class ImageJobService:
         mode: str,
         model: str,
         count: int,
+        size: str,
         reference_images: list[dict[str, object]],
     ) -> dict[str, object]:
         now = _now_iso()
@@ -184,6 +186,7 @@ class ImageJobService:
             "mode": "edit" if mode == "edit" else "generate",
             "model": str(model or "auto").strip() or "auto",
             "count": max(1, int(count or 1)),
+            "size": str(size or "1:1").strip() or "1:1",
             "status": "queued",
             "delivery_mode": "image_bed",
             "created_at": now,

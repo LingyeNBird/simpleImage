@@ -41,6 +41,7 @@ export type ImageJob = {
   mode: "generate" | "edit";
   model: ImageModel;
   count: number;
+  size?: string;
   status: "queued" | "running" | "success" | "error";
   delivery_mode: "image_bed";
   created_at: string;
@@ -305,7 +306,12 @@ export async function updateAccount(
   });
 }
 
-export async function generateImage(prompt: string, model?: ImageModel, deliveryMode: ImageDeliveryMode = "direct") {
+export async function generateImage(
+  prompt: string,
+  model?: ImageModel,
+  size: string = "1:1",
+  deliveryMode: ImageDeliveryMode = "direct",
+) {
   return httpRequest<{ created: number; data: Array<{ b64_json?: string; url?: string; object_key?: string; url_expires_at?: string; revised_prompt?: string; storage?: string }> }>(
     "/v1/images/generations",
     {
@@ -313,6 +319,7 @@ export async function generateImage(prompt: string, model?: ImageModel, delivery
       body: {
         prompt,
         ...(model ? { model } : {}),
+        size,
         n: 1,
         response_format: "b64_json",
         delivery_mode: deliveryMode,
@@ -325,6 +332,7 @@ export async function editImage(
   files: File | File[],
   prompt: string,
   model?: ImageModel,
+  size: string = "1:1",
   deliveryMode: ImageDeliveryMode = "direct",
 ) {
   const formData = new FormData();
@@ -337,6 +345,7 @@ export async function editImage(
   if (model) {
     formData.append("model", model);
   }
+  formData.append("size", size);
   formData.append("n", "1");
   formData.append("delivery_mode", deliveryMode);
 
@@ -391,6 +400,7 @@ export async function createImageJob(payload: {
   conversationTitle: string;
   mode: "generate" | "edit";
   imageCount: number;
+  imageSize?: string;
   model?: ImageModel;
   files?: File[];
 }) {
@@ -401,6 +411,7 @@ export async function createImageJob(payload: {
   formData.append("mode", payload.mode);
   formData.append("model", payload.model || "auto");
   formData.append("n", String(payload.imageCount));
+  formData.append("size", payload.imageSize || "1:1");
   formData.append("delivery_mode", "image_bed");
   for (const file of payload.files || []) {
     formData.append("image", file);

@@ -1,20 +1,22 @@
 "use client";
 
-import { ArrowUp, ImagePlus, LoaderCircle, X } from "lucide-react";
+import { ArrowUp, ImagePlus, LoaderCircle, Settings2, X } from "lucide-react";
 import { useMemo, useState, type ClipboardEvent, type RefObject } from "react";
 
 import { ImageLightbox } from "@/components/image-lightbox";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import type { ImageDeliveryMode } from "@/lib/api";
-import type { ImageConversationMode } from "@/store/image-conversations";
 import { cn } from "@/lib/utils";
+import type { ImageConversationMode } from "@/store/image-conversations";
 
 type ImageComposerProps = {
   mode: ImageConversationMode;
   prompt: string;
   imageCount: string;
+  imageSize: string;
   deliveryMode: ImageDeliveryMode;
   availableDeliveryModes: ImageDeliveryMode[];
   showAllDeliveryModes?: boolean;
@@ -25,6 +27,7 @@ type ImageComposerProps = {
   onModeChange: (value: ImageConversationMode) => void;
   onPromptChange: (value: string) => void;
   onImageCountChange: (value: string) => void;
+  onImageSizeChange: (value: string) => void;
   onDeliveryModeChange: (value: ImageDeliveryMode) => void;
   onSubmit: () => void | Promise<void>;
   onPickReferenceImage: () => void;
@@ -36,6 +39,7 @@ export function ImageComposer({
   mode,
   prompt,
   imageCount,
+  imageSize,
   deliveryMode,
   availableDeliveryModes,
   showAllDeliveryModes = false,
@@ -46,6 +50,7 @@ export function ImageComposer({
   onModeChange,
   onPromptChange,
   onImageCountChange,
+  onImageSizeChange,
   onDeliveryModeChange,
   onSubmit,
   onPickReferenceImage,
@@ -54,6 +59,7 @@ export function ImageComposer({
 }: ImageComposerProps) {
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState(0);
+  const [mobileSettingsOpen, setMobileSettingsOpen] = useState(false);
   const visibleDeliveryModes = useMemo<ImageDeliveryMode[]>(
     () => (showAllDeliveryModes ? ["direct", "image_bed"] : availableDeliveryModes),
     [availableDeliveryModes, showAllDeliveryModes],
@@ -73,6 +79,16 @@ export function ImageComposer({
     event.preventDefault();
     void onReferenceImageChange(imageFiles);
   };
+
+  const deliveryModeDescription =
+    deliveryMode === "image_bed"
+      ? "使用图床，避免出现连接问题"
+      : showAllDeliveryModes && !imageBedAvailable
+        ? "图床模式暂未就绪，请先在存储桶管理中完成 COS 配置"
+        : "直接传输图片，耗时较久";
+
+  const settingsSummary = `${mode === "edit" ? "图生图" : "文生图"} · ${imageCount || "1"} 张${visibleDeliveryModes.length > 1 ? ` · ${deliveryMode === "image_bed" ? "图床" : "直传"}` : ""}`;
+  const imageSizeOptions = ["1:1", "16:9", "4:3", "3:4", "9:16"];
 
   return (
     <div className="shrink-0 flex justify-center">
@@ -174,9 +190,98 @@ export function ImageComposer({
                     <div className="flex items-center gap-1.5 rounded-full bg-amber-50 px-3 py-2 text-xs font-medium text-amber-700">
                       <LoaderCircle className="size-3 animate-spin" />
                       {activeTaskCount} 个任务处理中或排队中
-                    </div>
+                     </div>
                   ) : null}
-                  <div className="flex items-center gap-2 rounded-full border border-stone-200 bg-white px-3 py-1">
+                  <Dialog open={mobileSettingsOpen} onOpenChange={setMobileSettingsOpen}>
+                    <DialogTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="h-10 rounded-full border-stone-200 bg-white px-4 text-sm font-medium text-stone-700 shadow-none sm:hidden"
+                      >
+                        <Settings2 className="size-4" />
+                        生图设置
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="w-[min(92vw,420px)] rounded-[28px] p-5">
+                      <DialogHeader>
+                        <DialogTitle>生图设置</DialogTitle>
+                        <DialogDescription>{settingsSummary}</DialogDescription>
+                      </DialogHeader>
+
+                      <div className="flex flex-col gap-5">
+                        <div className="flex items-center justify-between gap-3 rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3">
+                          <span className="text-sm font-medium text-stone-700">生成张数</span>
+                          <Input
+                            type="number"
+                            min="1"
+                            max="10"
+                            step="1"
+                            value={imageCount}
+                            onChange={(event) => onImageCountChange(event.target.value)}
+                            className="h-9 w-20 rounded-full border-stone-200 bg-white px-3 text-center text-sm font-medium text-stone-700"
+                          />
+                        </div>
+
+                        <div className="flex items-center justify-between gap-3 rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3">
+                          <span className="text-sm font-medium text-stone-700">图片比例</span>
+                          <select
+                            value={imageSize}
+                            onChange={(event) => onImageSizeChange(event.target.value)}
+                            className="h-9 min-w-[110px] rounded-full border border-stone-200 bg-white px-3 text-sm font-medium text-stone-700 outline-none"
+                          >
+                            {imageSizeOptions.map((option) => (
+                              <option key={option} value={option}>
+                                {option}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {visibleDeliveryModes.length > 1 ? (
+                          <div className="flex flex-col gap-3 rounded-2xl border border-stone-200 bg-stone-50 px-4 py-4">
+                            <div className="text-sm font-medium text-stone-700">传输模式</div>
+                            <div className="flex flex-wrap gap-2">
+                              {visibleDeliveryModes.includes("direct") ? (
+                                <ModeButton
+                                  active={deliveryMode === "direct"}
+                                  onClick={() => onDeliveryModeChange("direct")}
+                                  title="直接传输图片，耗时较久"
+                                >
+                                  直传
+                                </ModeButton>
+                              ) : null}
+                              {visibleDeliveryModes.includes("image_bed") ? (
+                                <ModeButton
+                                  active={deliveryMode === "image_bed"}
+                                  disabled={!imageBedAvailable}
+                                  onClick={() => onDeliveryModeChange("image_bed")}
+                                  title={imageBedAvailable ? "使用图床，避免出现连接问题" : "请先在存储桶管理中配置可用图床"}
+                                >
+                                  图床
+                                </ModeButton>
+                              ) : null}
+                            </div>
+                            <div className="text-xs leading-5 text-stone-500">{deliveryModeDescription}</div>
+                          </div>
+                        ) : null}
+
+                        <div className="flex flex-col gap-3 rounded-2xl border border-stone-200 bg-stone-50 px-4 py-4">
+                          <div className="text-sm font-medium text-stone-700">生图类型</div>
+                          <div className="flex flex-wrap gap-2">
+                            <ModeButton active={mode === "generate"} onClick={() => onModeChange("generate")}>
+                              文生图
+                            </ModeButton>
+                            <ModeButton active={mode === "edit"} onClick={() => onModeChange("edit")}>
+                              图生图
+                            </ModeButton>
+                          </div>
+                        </div>
+                      </div>
+                    </DialogContent>
+                  </Dialog>
+
+                  <div className="hidden items-center gap-2 rounded-full border border-stone-200 bg-white px-3 py-1 sm:flex">
                     <span className="text-sm font-medium text-stone-700">张数</span>
                     <Input
                       type="number"
@@ -188,8 +293,22 @@ export function ImageComposer({
                       className="h-8 w-[64px] border-0 bg-transparent px-0 text-center text-sm font-medium text-stone-700 shadow-none focus-visible:ring-0"
                     />
                   </div>
+                  <div className="hidden items-center gap-2 rounded-full border border-stone-200 bg-white px-3 py-1 sm:flex">
+                    <span className="text-sm font-medium text-stone-700">比例</span>
+                    <select
+                      value={imageSize}
+                      onChange={(event) => onImageSizeChange(event.target.value)}
+                      className="h-8 rounded-full border-0 bg-transparent px-0 text-sm font-medium text-stone-700 outline-none"
+                    >
+                      {imageSizeOptions.map((option) => (
+                        <option key={option} value={option}>
+                          {option}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                   {visibleDeliveryModes.length > 1 ? (
-                    <div className="flex flex-col gap-1">
+                    <div className="hidden flex-col gap-1 sm:flex">
                       <div className="flex items-center gap-2">
                         {visibleDeliveryModes.includes("direct") ? (
                           <ModeButton
@@ -211,16 +330,10 @@ export function ImageComposer({
                           </ModeButton>
                         ) : null}
                       </div>
-                      <div className="px-1 text-xs text-stone-500">
-                        {deliveryMode === "image_bed"
-                          ? "使用图床，避免出现连接问题"
-                          : showAllDeliveryModes && !imageBedAvailable
-                            ? "图床模式暂未就绪，请先在存储桶管理中完成 COS 配置"
-                            : "直接传输图片，耗时较久"}
-                      </div>
+                      <div className="px-1 text-xs text-stone-500">{deliveryModeDescription}</div>
                     </div>
                   ) : null}
-                  <div className="flex items-center gap-2">
+                  <div className="hidden items-center gap-2 sm:flex">
                     <ModeButton active={mode === "generate"} onClick={() => onModeChange("generate")}>
                       文生图
                     </ModeButton>

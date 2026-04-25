@@ -41,6 +41,7 @@ class ImageGenerationRequest(BaseModel):
     prompt: str = Field(..., min_length=1)
     model: str = "auto"
     n: int = Field(default=1, ge=1, le=4)
+    size: str = "1:1"
     response_format: str = "b64_json"
     history_disabled: bool = True
     delivery_mode: str = "direct"
@@ -425,6 +426,7 @@ def _sanitize_image_job(job: Mapping[str, object]) -> dict[str, object]:
         "mode": str(job.get("mode") or "generate").strip() or "generate",
         "model": str(job.get("model") or "auto").strip() or "auto",
         "count": _safe_int(job.get("count"), 1),
+        "size": str(job.get("size") or "1:1").strip() or "1:1",
         "status": str(job.get("status") or "queued").strip() or "queued",
         "delivery_mode": "image_bed",
         "created_at": str(job.get("created_at") or "").strip(),
@@ -462,6 +464,7 @@ def create_app() -> FastAPI:
             prompt = str(job.get("prompt") or "").strip()
             model = str(job.get("model") or "auto").strip() or "auto"
             count = max(1, _safe_int(job.get("count"), 1))
+            size = str(job.get("size") or "1:1").strip() or "1:1"
             mode = str(job.get("mode") or "generate").strip()
             if mode == "edit":
                 files = image_job_service.build_processor_files(job)
@@ -473,6 +476,7 @@ def create_app() -> FastAPI:
                     "b64_json",
                     None,
                     "image_bed",
+                    size,
                 )
             else:
                 result = chatgpt_service.generate_with_pool(
@@ -482,6 +486,7 @@ def create_app() -> FastAPI:
                     "b64_json",
                     None,
                     "image_bed",
+                    size,
                 )
             data = result.get("data") if isinstance(result, dict) else []
             result_images = []
@@ -733,6 +738,7 @@ def create_app() -> FastAPI:
                 body.response_format,
                 base_url,
                 delivery_mode,
+                body.size,
             )
         except ImageGenerationError as exc:
             raise HTTPException(status_code=502, detail={"error": str(exc)}) from exc
@@ -753,6 +759,7 @@ def create_app() -> FastAPI:
             n: int = Form(default=1),
             response_format: str = Form(default="b64_json"),
             delivery_mode: str = Form(default="direct"),
+            size: str = Form(default="1:1"),
     ):
         context = auth_service.require_authenticated(authorization)
         if n < 1 or n > 4:
@@ -786,6 +793,7 @@ def create_app() -> FastAPI:
                 response_format,
                 base_url,
                 normalized_delivery_mode,
+                size,
             )
         except ImageGenerationError as exc:
             raise HTTPException(status_code=502, detail={"error": str(exc)}) from exc
@@ -814,6 +822,7 @@ def create_app() -> FastAPI:
             model: str = Form(default="auto"),
             n: int = Form(default=1),
             delivery_mode: str = Form(default="image_bed"),
+            size: str = Form(default="1:1"),
     ):
         context = auth_service.require_authenticated(authorization)
         normalized_delivery_mode = _resolve_delivery_mode(context, delivery_mode)
@@ -845,6 +854,7 @@ def create_app() -> FastAPI:
             mode=normalized_mode,
             model=model,
             count=n,
+            size=size,
             reference_images=[],
         )
 

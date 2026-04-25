@@ -8,7 +8,7 @@ from services.account_service import AccountService
 from services.image_service import ImageGenerationError, edit_image_result, generate_image_result, is_token_invalid_error
 from services.utils import (
     build_chat_image_completion,
-    extract_chat_image,
+    extract_chat_images,
     extract_chat_prompt,
     extract_image_from_message_content,
     extract_response_prompt,
@@ -52,6 +52,7 @@ class ChatGPTService:
         response_format: str = "b64_json",
         base_url: str | None = None,
         delivery_mode: str = "direct",
+        size: str | None = None,
     ):
         created = None
         image_items: list[dict[str, object]] = []
@@ -66,7 +67,7 @@ class ChatGPTService:
 
                 print(f"[image-generate] start pooled token={request_token[:12]}... model={model} index={index}/{n}")
                 try:
-                    result = generate_image_result(request_token, prompt, model, response_format, base_url, delivery_mode)
+                    result = generate_image_result(request_token, prompt, model, response_format, base_url, delivery_mode, size)
                     account = self.account_service.mark_image_result(request_token, success=True)
                     if created is None:
                         created = result.get("created")
@@ -108,6 +109,7 @@ class ChatGPTService:
         response_format: str = "b64_json",
         base_url: str | None = None,
         delivery_mode: str = "direct",
+        size: str | None = None,
     ):
         created = None
         image_items: list[dict[str, object]] = []
@@ -136,6 +138,7 @@ class ChatGPTService:
                         response_format,
                         base_url,
                         delivery_mode,
+                        size,
                     )
                     account = self.account_service.mark_image_result(request_token, success=True)
                     if created is None:
@@ -182,16 +185,17 @@ class ChatGPTService:
         model = str(body.get("model") or "gpt-image-1").strip() or "gpt-image-1"
         n = parse_image_count(body.get("n"))
         prompt = extract_chat_prompt(body)
+        size = str(body.get("size") or "1:1").strip() or "1:1"
         if not prompt:
             raise HTTPException(status_code=400, detail={"error": "prompt is required"})
 
-        image_info = extract_chat_image(body)
+        image_infos = extract_chat_images(body)
         try:
-            if image_info:
-                image_data, mime_type = image_info
-                image_result = self.edit_with_pool(prompt, [(image_data, "image.png", mime_type)], model, n)
+            if image_infos:
+                files = [(image_data, f"image-{index + 1}.png", mime_type) for index, (image_data, mime_type) in enumerate(image_infos)]
+                image_result = self.edit_with_pool(prompt, files, model, n, size=size)
             else:
-                image_result = self.generate_with_pool(prompt, model, n)
+                image_result = self.generate_with_pool(prompt, model, n, size=size)
         except ImageGenerationError as exc:
             raise HTTPException(status_code=502, detail={"error": str(exc)}) from exc
 
@@ -222,9 +226,10 @@ class ChatGPTService:
         except ImageGenerationError as exc:
             raise HTTPException(status_code=502, detail={"error": str(exc)}) from exc
 
-        image_items = image_result.get("data") if isinstance(image_result.get("data"), list) else []
-        output = []
-        for item in image_items:
+        image_items = image_result.get("data")
+        normalized_image_items = image_items if isinstance(image_items, list) else []
+        output: list[dict[str, object]] = []
+        for item in normalized_image_items:
             if not isinstance(item, dict):
                 continue
             b64_json = str(item.get("b64_json") or "").strip()
@@ -243,7 +248,17 @@ class ChatGPTService:
         if not output:
             raise HTTPException(status_code=502, detail={"error": "image generation failed"})
 
-        created = int(image_result.get("created") or 0)
+        created_raw = image_result.get("created")
+        if isinstance(created_raw, bool):
+            created = int(created_raw)
+        elif isinstance(created_raw, int):
+            created = created_raw
+        elif isinstance(created_raw, float):
+            created = int(created_raw)
+        elif isinstance(created_raw, str):
+            created = int(created_raw.strip() or "0")
+        else:
+            created = 0
         return {
             "id": f"resp_{created}",
             "object": "response",

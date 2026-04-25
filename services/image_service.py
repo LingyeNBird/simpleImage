@@ -28,6 +28,7 @@ USER_AGENT = (
 )
 DEFAULT_MODEL = "auto"
 MAX_POW_ATTEMPTS = 500000
+ALLOWED_IMAGE_SIZES = {"1:1", "16:9", "9:16", "4:3", "3:4"}
 
 _CORES = [16, 24, 32]
 _SCREENS = [3000, 4000, 6000]
@@ -240,6 +241,25 @@ def is_token_invalid_error(message: str) -> bool:
     )
 
 
+def _normalize_image_size(size: object) -> str | None:
+    value = str(size or "").strip()
+    return value if value in ALLOWED_IMAGE_SIZES else None
+
+
+def _append_size_instruction(prompt: str, size: object) -> str:
+    normalized_size = _normalize_image_size(size)
+    if not normalized_size:
+        return prompt
+    orientation = {
+        "1:1": "正方形",
+        "16:9": "横版",
+        "4:3": "横版",
+        "3:4": "竖版",
+        "9:16": "竖版",
+    }.get(normalized_size, "")
+    return f"{prompt}\n\n请使用 {normalized_size} 图片比例{f'（{orientation}）' if orientation else ''}。"
+
+
 def _upload_image(session: Session, access_token: str, device_id: str, image_data: bytes, file_name: str, mime_type: str) -> str:
     response = _retry(
         lambda: session.post(
@@ -317,6 +337,7 @@ def _send_edit_conversation(
     prompt: str,
     model: str,
     images: list[EditInputImage],
+    size: str | None = None,
 ):
     headers = {
         "Authorization": f"Bearer {access_token}",
@@ -368,7 +389,7 @@ def _send_edit_conversation(
                         "author": {"role": "user"},
                         "content": {
                             "content_type": "multimodal_text",
-                            "parts": [*image_parts, prompt],
+                            "parts": [*image_parts, _append_size_instruction(prompt, size)],
                         },
                         "metadata": {
                             "attachments": attachments,
@@ -421,6 +442,7 @@ def _send_conversation(
     parent_message_id: str,
     prompt: str,
     model: str,
+    size: str | None = None,
 ):
     headers = {
         "Authorization": f"Bearer {access_token}",
@@ -447,7 +469,7 @@ def _send_conversation(
                     {
                         "id": str(uuid.uuid4()),
                         "author": {"role": "user"},
-                        "content": {"content_type": "text", "parts": [prompt]},
+                        "content": {"content_type": "text", "parts": [_append_size_instruction(prompt, size)]},
                         "metadata": {
                             "attachments": [],
                         },
@@ -725,6 +747,7 @@ def generate_image_result(
     response_format: str = "b64_json",
     base_url: str | None = None,
     delivery_mode: str = "direct",
+    size: str | None = None,
 ) -> dict:
     prompt = str(prompt or "").strip()
     access_token = str(access_token or "").strip()
@@ -762,6 +785,7 @@ def generate_image_result(
                 parent_message_id,
                 prompt,
                 upstream_model,
+                size,
             )
             parsed = _parse_sse(response)
             actual_conversation_id = parsed.get("conversation_id") or ""
@@ -839,6 +863,7 @@ def edit_image_result(
     response_format: str = "b64_json",
     base_url: str | None = None,
     delivery_mode: str = "direct",
+    size: str | None = None,
 ) -> dict:
     prompt = str(prompt or "").strip()
     access_token = str(access_token or "").strip()
@@ -899,6 +924,7 @@ def edit_image_result(
                 prompt,
                 upstream_model,
                 uploaded_images,
+                size,
             )
             parsed = _parse_sse(response)
             actual_conversation_id = parsed.get("conversation_id") or ""
