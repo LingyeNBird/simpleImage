@@ -67,10 +67,10 @@ export function TopNav() {
             href="/image"
             className="py-2 text-[15px] font-semibold tracking-tight text-stone-950 transition hover:text-stone-700"
           >
-            chatgpt2api
+            simpleImage
           </Link>
           <a
-            href="https://github.com/basketikun/chatgpt2api"
+            href="https://github.com/LingyeNBird/simpleImage"
             target="_blank"
             rel="noreferrer"
             className="inline-flex items-center gap-1.5 py-2 text-sm text-stone-400 transition hover:text-stone-700"
