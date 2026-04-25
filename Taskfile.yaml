@@ -27,7 +27,15 @@ tasks:
     desc: Pull latest image and recreate containers
     cmds:
       - docker compose pull
-      - docker compose up -d --force-recreate
+      - docker compose up -d --force-recreate --remove-orphans
+      - docker compose ps
+
+  docker:clean-cache:
+    desc: Clean this project's build cache without stopping containers
+    cmds:
+      - docker buildx prune --builder {{.BUILDER}} --all --force
+      - docker builder prune --all --force --filter until=24h
+    ignore_error: true
 
   docker:publish:
     desc: Build and push Docker Hub image
