@@ -78,6 +78,12 @@ def has_response_image_generation_tool(body: dict[str, object]) -> bool:
 
 def extract_response_image_options(body: dict[str, object]) -> ImageResponseOptions:
     tool_payload: dict[str, object] | None = None
+    reasoning = body.get("reasoning")
+    reasoning_payload = reasoning if isinstance(reasoning, dict) else None
+    include = body.get("include")
+    include_payload = include if isinstance(include, list) else None
+    tool_choice = body.get("tool_choice")
+    tool_choice_payload = tool_choice if isinstance(tool_choice, dict) else None
     tools = body.get("tools")
     if isinstance(tools, list):
         for tool in tools:
@@ -93,6 +99,18 @@ def extract_response_image_options(body: dict[str, object]) -> ImageResponseOpti
         tool_payload.get("output_format") if tool_payload else None,
         tool_payload.get("output_compression") if tool_payload else None,
         tool_payload.get("moderation") if tool_payload else None,
+        body.get("model"),
+        tool_payload.get("model") if tool_payload else None,
+        body.get("instructions"),
+        reasoning_payload.get("effort") if reasoning_payload else None,
+        reasoning_payload.get("summary") if reasoning_payload else None,
+        body.get("parallel_tool_calls"),
+        "reasoning.encrypted_content" in include_payload if include_payload is not None else None,
+        body.get("store"),
+        tool_payload.get("partial_images") if tool_payload else None,
+        "required"
+        if tool_choice_payload and str(tool_choice_payload.get("type") or "") == "image_generation"
+        else body.get("tool_choice"),
     )
 
 

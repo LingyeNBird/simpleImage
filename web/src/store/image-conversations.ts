@@ -7,15 +7,31 @@ import type {
   ImageResponseModeration,
   ImageResponseOutputFormat,
   ImageResponseQuality,
+  ImageResponseReasoningEffort,
+  ImageResponseReasoningSummary,
   ImageResponseResolution,
+  ImageResponseToolChoice,
   ImageUpstreamEndpoint,
 } from "@/lib/image-generation-options";
 import {
+  DEFAULT_IMAGE_RESPONSE_INCLUDE_ENCRYPTED_REASONING,
+  DEFAULT_IMAGE_RESPONSE_MAIN_MODEL,
   DEFAULT_IMAGE_RESPONSE_OUTPUT_COMPRESSION,
+  DEFAULT_IMAGE_RESPONSE_PARALLEL_TOOL_CALLS,
+  DEFAULT_IMAGE_RESPONSE_PARTIAL_IMAGES,
+  DEFAULT_IMAGE_RESPONSE_REASONING_EFFORT,
+  DEFAULT_IMAGE_RESPONSE_REASONING_SUMMARY,
+  DEFAULT_IMAGE_RESPONSE_STORE,
+  DEFAULT_IMAGE_RESPONSE_TOOL_CHOICE,
+  DEFAULT_IMAGE_RESPONSE_TOOL_MODEL,
+  isImageResponseReasoningEffort,
+  isImageResponseReasoningSummary,
   isImageResponseModeration,
   isImageResponseOutputFormat,
   isImageResponseResolution,
+  isImageResponseToolChoice,
   normalizeImageResponseOutputCompression,
+  normalizeImageResponsePartialImages,
 } from "@/lib/image-generation-options";
 import type { ImageDeliveryMode, ImageModel } from "@/lib/api";
 
@@ -53,6 +69,16 @@ export type ImageTurn = {
    responseOutputFormat: ImageResponseOutputFormat;
    responseOutputCompression: string;
    responseModeration: ImageResponseModeration;
+   responseMainModel: string;
+   responseToolModel: string;
+   responseInstructions: string;
+   responseReasoningEffort: ImageResponseReasoningEffort;
+   responseReasoningSummary: ImageResponseReasoningSummary;
+   responseParallelToolCalls: boolean;
+   responseIncludeEncryptedReasoning: boolean;
+   responseStore: boolean;
+   responsePartialImages: string;
+   responseToolChoice: ImageResponseToolChoice;
    referenceImages: StoredReferenceImage[];
   count: number;
   size: string;
@@ -165,6 +191,29 @@ function normalizeTurn(turn: ImageTurn & Record<string, unknown>): ImageTurn {
     responseOutputCompression: normalizeImageResponseOutputCompression(String(turn.responseOutputCompression || DEFAULT_IMAGE_RESPONSE_OUTPUT_COMPRESSION)),
     responseModeration:
       typeof turn.responseModeration === "string" && isImageResponseModeration(turn.responseModeration) ? turn.responseModeration : "auto",
+    responseMainModel: typeof turn.responseMainModel === "string" && turn.responseMainModel.trim() ? turn.responseMainModel.trim() : DEFAULT_IMAGE_RESPONSE_MAIN_MODEL,
+    responseToolModel: typeof turn.responseToolModel === "string" && turn.responseToolModel.trim() ? turn.responseToolModel.trim() : DEFAULT_IMAGE_RESPONSE_TOOL_MODEL,
+    responseInstructions: typeof turn.responseInstructions === "string" ? turn.responseInstructions : "",
+    responseReasoningEffort:
+      typeof turn.responseReasoningEffort === "string" && isImageResponseReasoningEffort(turn.responseReasoningEffort)
+        ? turn.responseReasoningEffort
+        : DEFAULT_IMAGE_RESPONSE_REASONING_EFFORT,
+    responseReasoningSummary:
+      typeof turn.responseReasoningSummary === "string" && isImageResponseReasoningSummary(turn.responseReasoningSummary)
+        ? turn.responseReasoningSummary
+        : DEFAULT_IMAGE_RESPONSE_REASONING_SUMMARY,
+    responseParallelToolCalls:
+      typeof turn.responseParallelToolCalls === "boolean" ? turn.responseParallelToolCalls : DEFAULT_IMAGE_RESPONSE_PARALLEL_TOOL_CALLS,
+    responseIncludeEncryptedReasoning:
+      typeof turn.responseIncludeEncryptedReasoning === "boolean"
+        ? turn.responseIncludeEncryptedReasoning
+        : DEFAULT_IMAGE_RESPONSE_INCLUDE_ENCRYPTED_REASONING,
+    responseStore: typeof turn.responseStore === "boolean" ? turn.responseStore : DEFAULT_IMAGE_RESPONSE_STORE,
+    responsePartialImages: normalizeImageResponsePartialImages(String(turn.responsePartialImages || DEFAULT_IMAGE_RESPONSE_PARTIAL_IMAGES)),
+    responseToolChoice:
+      typeof turn.responseToolChoice === "string" && isImageResponseToolChoice(turn.responseToolChoice)
+        ? turn.responseToolChoice
+        : DEFAULT_IMAGE_RESPONSE_TOOL_CHOICE,
     referenceImages: getLegacyReferenceImages(turn),
     count: Math.max(1, Number(turn.count || normalizedImages.length || 1)),
     size: String(turn.size || "1:1"),
@@ -217,6 +266,39 @@ function normalizeConversation(conversation: ImageConversation & Record<string, 
             typeof conversation.responseModeration === "string" && isImageResponseModeration(conversation.responseModeration)
               ? conversation.responseModeration
               : "auto",
+          responseMainModel:
+            typeof conversation.responseMainModel === "string" && conversation.responseMainModel.trim()
+              ? conversation.responseMainModel.trim()
+              : DEFAULT_IMAGE_RESPONSE_MAIN_MODEL,
+          responseToolModel:
+            typeof conversation.responseToolModel === "string" && conversation.responseToolModel.trim()
+              ? conversation.responseToolModel.trim()
+              : DEFAULT_IMAGE_RESPONSE_TOOL_MODEL,
+          responseInstructions: typeof conversation.responseInstructions === "string" ? conversation.responseInstructions : "",
+          responseReasoningEffort:
+            typeof conversation.responseReasoningEffort === "string" && isImageResponseReasoningEffort(conversation.responseReasoningEffort)
+              ? conversation.responseReasoningEffort
+              : DEFAULT_IMAGE_RESPONSE_REASONING_EFFORT,
+          responseReasoningSummary:
+            typeof conversation.responseReasoningSummary === "string" && isImageResponseReasoningSummary(conversation.responseReasoningSummary)
+              ? conversation.responseReasoningSummary
+              : DEFAULT_IMAGE_RESPONSE_REASONING_SUMMARY,
+          responseParallelToolCalls:
+            typeof conversation.responseParallelToolCalls === "boolean"
+              ? conversation.responseParallelToolCalls
+              : DEFAULT_IMAGE_RESPONSE_PARALLEL_TOOL_CALLS,
+          responseIncludeEncryptedReasoning:
+            typeof conversation.responseIncludeEncryptedReasoning === "boolean"
+              ? conversation.responseIncludeEncryptedReasoning
+              : DEFAULT_IMAGE_RESPONSE_INCLUDE_ENCRYPTED_REASONING,
+          responseStore: typeof conversation.responseStore === "boolean" ? conversation.responseStore : DEFAULT_IMAGE_RESPONSE_STORE,
+          responsePartialImages: normalizeImageResponsePartialImages(
+            String(conversation.responsePartialImages || DEFAULT_IMAGE_RESPONSE_PARTIAL_IMAGES),
+          ),
+          responseToolChoice:
+            typeof conversation.responseToolChoice === "string" && isImageResponseToolChoice(conversation.responseToolChoice)
+              ? conversation.responseToolChoice
+              : DEFAULT_IMAGE_RESPONSE_TOOL_CHOICE,
           referenceImages: getLegacyReferenceImages(conversation),
           count: Number(conversation.count || 1),
           size: String(conversation.size || "1:1"),

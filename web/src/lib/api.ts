@@ -4,7 +4,10 @@ import type {
   ImageResponseModeration,
   ImageResponseOutputFormat,
   ImageResponseQuality,
+  ImageResponseReasoningEffort,
+  ImageResponseReasoningSummary,
   ImageResponseResolution,
+  ImageResponseToolChoice,
   ImageUpstreamEndpoint,
 } from "@/lib/image-generation-options";
 
@@ -57,6 +60,16 @@ export type ImageJob = {
   response_output_format?: ImageResponseOutputFormat;
   response_output_compression?: number | null;
   response_moderation?: ImageResponseModeration;
+  response_main_model?: string;
+  response_tool_model?: string;
+  response_instructions?: string;
+  response_reasoning_effort?: ImageResponseReasoningEffort;
+  response_reasoning_summary?: ImageResponseReasoningSummary;
+  response_parallel_tool_calls?: boolean;
+  response_include_encrypted_reasoning?: boolean;
+  response_store?: boolean;
+  response_partial_images?: number;
+  response_tool_choice?: ImageResponseToolChoice;
   status: "queued" | "running" | "success" | "error";
   delivery_mode: "image_bed";
   created_at: string;
@@ -347,6 +360,16 @@ export async function generateImage(
   responseOutputFormat: ImageResponseOutputFormat = "png",
   responseOutputCompression: string = "auto",
   responseModeration: ImageResponseModeration = "auto",
+  responseMainModel: string = "gpt-5.4-mini",
+  responseToolModel: string = "auto",
+  responseInstructions: string = "",
+  responseReasoningEffort: ImageResponseReasoningEffort = "medium",
+  responseReasoningSummary: ImageResponseReasoningSummary = "auto",
+  responseParallelToolCalls: boolean = true,
+  responseIncludeEncryptedReasoning: boolean = true,
+  responseStore: boolean = false,
+  responsePartialImages: string = "0",
+  responseToolChoice: ImageResponseToolChoice = "required",
 ) {
   const normalizedOutputCompression = String(responseOutputCompression || "auto").trim().toLowerCase();
   return httpRequest<{ created: number; data: Array<{ b64_json?: string; url?: string; object_key?: string; url_expires_at?: string; revised_prompt?: string; storage?: string }> }>(
@@ -367,6 +390,16 @@ export async function generateImage(
         response_output_format: responseOutputFormat,
         response_output_compression: normalizedOutputCompression === "auto" ? null : Number(normalizedOutputCompression),
         response_moderation: responseModeration,
+        response_main_model: responseMainModel,
+        response_tool_model: responseToolModel,
+        response_instructions: responseInstructions,
+        response_reasoning_effort: responseReasoningEffort,
+        response_reasoning_summary: responseReasoningSummary,
+        response_parallel_tool_calls: responseParallelToolCalls,
+        response_include_encrypted_reasoning: responseIncludeEncryptedReasoning,
+        response_store: responseStore,
+        response_partial_images: Number(responsePartialImages || "0"),
+        response_tool_choice: responseToolChoice,
       },
     },
   );
@@ -385,6 +418,16 @@ export async function editImage(
   responseOutputFormat: ImageResponseOutputFormat = "png",
   responseOutputCompression: string = "auto",
   responseModeration: ImageResponseModeration = "auto",
+  responseMainModel: string = "gpt-5.4-mini",
+  responseToolModel: string = "auto",
+  responseInstructions: string = "",
+  responseReasoningEffort: ImageResponseReasoningEffort = "medium",
+  responseReasoningSummary: ImageResponseReasoningSummary = "auto",
+  responseParallelToolCalls: boolean = true,
+  responseIncludeEncryptedReasoning: boolean = true,
+  responseStore: boolean = false,
+  responsePartialImages: string = "0",
+  responseToolChoice: ImageResponseToolChoice = "required",
 ) {
   const formData = new FormData();
   const uploadFiles = Array.isArray(files) ? files : [files];
@@ -409,6 +452,16 @@ export async function editImage(
     formData.append("response_output_compression", normalizedOutputCompression);
   }
   formData.append("response_moderation", responseModeration);
+  formData.append("response_main_model", responseMainModel);
+  formData.append("response_tool_model", responseToolModel);
+  formData.append("response_instructions", responseInstructions);
+  formData.append("response_reasoning_effort", responseReasoningEffort);
+  formData.append("response_reasoning_summary", responseReasoningSummary);
+  formData.append("response_parallel_tool_calls", String(responseParallelToolCalls));
+  formData.append("response_include_encrypted_reasoning", String(responseIncludeEncryptedReasoning));
+  formData.append("response_store", String(responseStore));
+  formData.append("response_partial_images", responsePartialImages || "0");
+  formData.append("response_tool_choice", responseToolChoice);
 
   return httpRequest<{ created: number; data: Array<{ b64_json?: string; url?: string; object_key?: string; url_expires_at?: string; revised_prompt?: string; storage?: string }> }>(
     "/v1/images/edits",
@@ -501,6 +554,16 @@ export async function createImageJob(payload: {
   responseOutputFormat?: ImageResponseOutputFormat;
   responseOutputCompression?: string;
   responseModeration?: ImageResponseModeration;
+  responseMainModel?: string;
+  responseToolModel?: string;
+  responseInstructions?: string;
+  responseReasoningEffort?: ImageResponseReasoningEffort;
+  responseReasoningSummary?: ImageResponseReasoningSummary;
+  responseParallelToolCalls?: boolean;
+  responseIncludeEncryptedReasoning?: boolean;
+  responseStore?: boolean;
+  responsePartialImages?: string;
+  responseToolChoice?: ImageResponseToolChoice;
   model?: ImageModel;
   files?: File[];
 }) {
@@ -521,6 +584,16 @@ export async function createImageJob(payload: {
     formData.append("response_output_compression", payload.responseOutputCompression);
   }
   formData.append("response_moderation", payload.responseModeration || "auto");
+  formData.append("response_main_model", payload.responseMainModel || "gpt-5.4-mini");
+  formData.append("response_tool_model", payload.responseToolModel || "auto");
+  formData.append("response_instructions", payload.responseInstructions || "");
+  formData.append("response_reasoning_effort", payload.responseReasoningEffort || "medium");
+  formData.append("response_reasoning_summary", payload.responseReasoningSummary || "auto");
+  formData.append("response_parallel_tool_calls", String(payload.responseParallelToolCalls ?? true));
+  formData.append("response_include_encrypted_reasoning", String(payload.responseIncludeEncryptedReasoning ?? true));
+  formData.append("response_store", String(payload.responseStore ?? false));
+  formData.append("response_partial_images", payload.responsePartialImages || "0");
+  formData.append("response_tool_choice", payload.responseToolChoice || "required");
   formData.append("delivery_mode", "image_bed");
   for (const file of payload.files || []) {
     formData.append("image", file);

@@ -14,7 +14,6 @@ from services.image_service import ImageGenerationError
 
 CODEX_BASE_URL = "https://chatgpt.com/backend-api/codex"
 CODEX_USER_AGENT = "codex-tui/0.118.0 (Mac OS 26.3.1; arm64) iTerm.app/3.6.9 (codex-tui; 0.118.0)"
-DEFAULT_RESPONSES_MAIN_MODEL = "gpt-5.4-mini"
 DEFAULT_RESPONSES_TOOL_MODEL = "gpt-image-2"
 
 
@@ -44,7 +43,10 @@ def _new_responses_session() -> Session:
     return Session(impersonate="chrome131", verify=True)
 
 
-def _resolve_responses_tool_model(requested_model: str) -> str:
+def _resolve_responses_tool_model(requested_model: str, configured_tool_model: str) -> str:
+    normalized_configured = str(configured_tool_model or "").strip()
+    if normalized_configured and normalized_configured.lower() != "auto":
+        return normalized_configured
     normalized = str(requested_model or "").strip()
     if not normalized or normalized == "auto":
         return DEFAULT_RESPONSES_TOOL_MODEL
@@ -55,9 +57,9 @@ def _build_responses_tool(action: str, requested_model: str, options: ImageRespo
     tool: dict[str, object] = {
         "type": "image_generation",
         "action": action,
-        "model": _resolve_responses_tool_model(requested_model),
+        "model": _resolve_responses_tool_model(requested_model, options.tool_model),
         "output_format": options.output_format,
-        "partial_images": 0,
+        "partial_images": options.partial_images,
     }
     if options.output_compression is not None and options.output_format != "png":
         tool["output_compression"] = options.output_compression
@@ -84,18 +86,20 @@ def _build_responses_request(
     for image_url in images or []:
         if str(image_url or "").strip():
             content.append({"type": "input_image", "image_url": str(image_url).strip()})
-    return {
-        "instructions": "",
+    request_payload: dict[str, object] = {
+        "instructions": options.instructions,
         "stream": True,
-        "reasoning": {"effort": "medium", "summary": "auto"},
-        "parallel_tool_calls": True,
-        "include": ["reasoning.encrypted_content"],
-        "model": DEFAULT_RESPONSES_MAIN_MODEL,
-        "store": False,
-        "tool_choice": {"type": "image_generation"},
+        "reasoning": {"effort": options.reasoning_effort, "summary": options.reasoning_summary},
+        "parallel_tool_calls": options.parallel_tool_calls,
+        "include": ["reasoning.encrypted_content"] if options.include_encrypted_reasoning else [],
+        "model": options.main_model,
+        "store": options.store,
         "input": [{"type": "message", "role": "user", "content": content}],
         "tools": [_build_responses_tool(action, requested_model, options)],
     }
+    if options.tool_choice == "required":
+        request_payload["tool_choice"] = {"type": "image_generation"}
+    return request_payload
 
 
 def _iter_sse_payloads(response: Any) -> list[dict[str, object]]:

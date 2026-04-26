@@ -5,6 +5,7 @@ import { useMemo, useState, type ClipboardEvent, type RefObject } from "react";
 
 import { ImageLightbox } from "@/components/image-lightbox";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -14,7 +15,10 @@ import {
   IMAGE_RESPONSE_MODERATION_OPTIONS,
   IMAGE_RESPONSE_OUTPUT_FORMAT_OPTIONS,
   IMAGE_RESPONSE_QUALITY_OPTIONS,
+  IMAGE_RESPONSE_REASONING_EFFORT_OPTIONS,
+  IMAGE_RESPONSE_REASONING_SUMMARY_OPTIONS,
   IMAGE_RESPONSE_RESOLUTION_OPTIONS,
+  IMAGE_RESPONSE_TOOL_CHOICE_OPTIONS,
   IMAGE_SIZE_LABELS,
   IMAGE_SIZE_OPTIONS,
   IMAGE_UPSTREAM_ENDPOINT_OPTIONS,
@@ -22,7 +26,10 @@ import {
   type ImageResponseModeration,
   type ImageResponseOutputFormat,
   type ImageResponseQuality,
+  type ImageResponseReasoningEffort,
+  type ImageResponseReasoningSummary,
   type ImageResponseResolution,
+  type ImageResponseToolChoice,
   type ImageUpstreamEndpoint,
 } from "@/lib/image-generation-options";
 import type { ImageDeliveryMode } from "@/lib/api";
@@ -41,6 +48,16 @@ type ImageComposerProps = {
   responseOutputFormat: ImageResponseOutputFormat;
   responseOutputCompression: string;
   responseModeration: ImageResponseModeration;
+  responseMainModel: string;
+  responseToolModel: string;
+  responseInstructions: string;
+  responseReasoningEffort: ImageResponseReasoningEffort;
+  responseReasoningSummary: ImageResponseReasoningSummary;
+  responseParallelToolCalls: boolean;
+  responseIncludeEncryptedReasoning: boolean;
+  responseStore: boolean;
+  responsePartialImages: string;
+  responseToolChoice: ImageResponseToolChoice;
   deliveryMode: ImageDeliveryMode;
   availableDeliveryModes: ImageDeliveryMode[];
   showAllDeliveryModes?: boolean;
@@ -59,6 +76,16 @@ type ImageComposerProps = {
   onResponseOutputFormatChange: (value: ImageResponseOutputFormat) => void;
   onResponseOutputCompressionChange: (value: string) => void;
   onResponseModerationChange: (value: ImageResponseModeration) => void;
+  onResponseMainModelChange: (value: string) => void;
+  onResponseToolModelChange: (value: string) => void;
+  onResponseInstructionsChange: (value: string) => void;
+  onResponseReasoningEffortChange: (value: ImageResponseReasoningEffort) => void;
+  onResponseReasoningSummaryChange: (value: ImageResponseReasoningSummary) => void;
+  onResponseParallelToolCallsChange: (value: boolean) => void;
+  onResponseIncludeEncryptedReasoningChange: (value: boolean) => void;
+  onResponseStoreChange: (value: boolean) => void;
+  onResponsePartialImagesChange: (value: string) => void;
+  onResponseToolChoiceChange: (value: ImageResponseToolChoice) => void;
   onDeliveryModeChange: (value: ImageDeliveryMode) => void;
   onSubmit: () => void | Promise<void>;
   onPickReferenceImage: () => void;
@@ -78,6 +105,16 @@ export function ImageComposer({
   responseOutputFormat,
   responseOutputCompression,
   responseModeration,
+  responseMainModel,
+  responseToolModel,
+  responseInstructions,
+  responseReasoningEffort,
+  responseReasoningSummary,
+  responseParallelToolCalls,
+  responseIncludeEncryptedReasoning,
+  responseStore,
+  responsePartialImages,
+  responseToolChoice,
   deliveryMode,
   availableDeliveryModes,
   showAllDeliveryModes = false,
@@ -96,6 +133,16 @@ export function ImageComposer({
   onResponseOutputFormatChange,
   onResponseOutputCompressionChange,
   onResponseModerationChange,
+  onResponseMainModelChange,
+  onResponseToolModelChange,
+  onResponseInstructionsChange,
+  onResponseReasoningEffortChange,
+  onResponseReasoningSummaryChange,
+  onResponseParallelToolCallsChange,
+  onResponseIncludeEncryptedReasoningChange,
+  onResponseStoreChange,
+  onResponsePartialImagesChange,
+  onResponseToolChoiceChange,
   onDeliveryModeChange,
   onSubmit,
   onPickReferenceImage,
@@ -379,6 +426,117 @@ export function ImageComposer({
                                   ))}
                                 </SelectContent>
                               </Select>
+                            </div>
+                            <div className="grid gap-3 rounded-2xl border border-stone-200 bg-stone-50 px-4 py-4">
+                              <div className="text-sm font-medium text-stone-700">Response 模型设置</div>
+                              <div className="flex items-center justify-between gap-3">
+                                <span className="text-sm text-stone-700">主模型</span>
+                                <Input
+                                  value={responseMainModel}
+                                  onChange={(event) => onResponseMainModelChange(event.target.value)}
+                                  className="h-9 w-[180px] rounded-full border-stone-200 bg-white px-3 text-sm text-stone-700"
+                                />
+                              </div>
+                              <div className="flex items-center justify-between gap-3">
+                                <span className="text-sm text-stone-700">工具模型</span>
+                                <Input
+                                  value={responseToolModel}
+                                  onChange={(event) => onResponseToolModelChange(event.target.value)}
+                                  placeholder="auto / gpt-image-2"
+                                  className="h-9 w-[180px] rounded-full border-stone-200 bg-white px-3 text-sm text-stone-700"
+                                />
+                              </div>
+                            </div>
+                            <div className="grid gap-3 rounded-2xl border border-stone-200 bg-stone-50 px-4 py-4">
+                              <div className="text-sm font-medium text-stone-700">Response 推理设置</div>
+                              <div className="flex items-center justify-between gap-3">
+                                <span className="text-sm text-stone-700">推理强度</span>
+                                <Select value={responseReasoningEffort} onValueChange={(value) => onResponseReasoningEffortChange(value as ImageResponseReasoningEffort)}>
+                                  <SelectTrigger className="h-9 min-w-[132px] rounded-full border-stone-200 bg-white px-3 text-sm text-stone-700 shadow-none focus-visible:ring-0">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {IMAGE_RESPONSE_REASONING_EFFORT_OPTIONS.map((option) => (
+                                      <SelectItem key={option.value} value={option.value}>
+                                        {option.label}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              <div className="flex items-center justify-between gap-3">
+                                <span className="text-sm text-stone-700">推理摘要</span>
+                                <Select value={responseReasoningSummary} onValueChange={(value) => onResponseReasoningSummaryChange(value as ImageResponseReasoningSummary)}>
+                                  <SelectTrigger className="h-9 min-w-[132px] rounded-full border-stone-200 bg-white px-3 text-sm text-stone-700 shadow-none focus-visible:ring-0">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {IMAGE_RESPONSE_REASONING_SUMMARY_OPTIONS.map((option) => (
+                                      <SelectItem key={option.value} value={option.value}>
+                                        {option.label}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              <div className="flex items-center justify-between gap-3">
+                                <span className="text-sm text-stone-700">阶段预览数</span>
+                                <Input
+                                  type="number"
+                                  min="0"
+                                  step="1"
+                                  value={responsePartialImages}
+                                  onChange={(event) => onResponsePartialImagesChange(event.target.value)}
+                                  className="h-9 w-28 rounded-full border-stone-200 bg-white px-3 text-center text-sm text-stone-700"
+                                />
+                              </div>
+                            </div>
+                            <div className="grid gap-3 rounded-2xl border border-stone-200 bg-stone-50 px-4 py-4">
+                              <div className="text-sm font-medium text-stone-700">Response 行为设置</div>
+                              <div className="flex items-center justify-between gap-3">
+                                <span className="text-sm text-stone-700">工具选择</span>
+                                <Select value={responseToolChoice} onValueChange={(value) => onResponseToolChoiceChange(value as ImageResponseToolChoice)}>
+                                  <SelectTrigger className="h-9 min-w-[132px] rounded-full border-stone-200 bg-white px-3 text-sm text-stone-700 shadow-none focus-visible:ring-0">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {IMAGE_RESPONSE_TOOL_CHOICE_OPTIONS.map((option) => (
+                                      <SelectItem key={option.value} value={option.value}>
+                                        {option.label}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              <div className="flex items-center justify-between gap-3">
+                                <label className="text-sm text-stone-700" htmlFor="response-parallel-tool-calls">并行工具调用</label>
+                                <Checkbox
+                                  id="response-parallel-tool-calls"
+                                  checked={responseParallelToolCalls}
+                                  onCheckedChange={(checked) => onResponseParallelToolCallsChange(Boolean(checked))}
+                                />
+                              </div>
+                              <div className="flex items-center justify-between gap-3">
+                                <label className="text-sm text-stone-700" htmlFor="response-encrypted-reasoning">返回加密推理</label>
+                                <Checkbox
+                                  id="response-encrypted-reasoning"
+                                  checked={responseIncludeEncryptedReasoning}
+                                  onCheckedChange={(checked) => onResponseIncludeEncryptedReasoningChange(Boolean(checked))}
+                                />
+                              </div>
+                              <div className="flex items-center justify-between gap-3">
+                                <label className="text-sm text-stone-700" htmlFor="response-store">保存到上游 store</label>
+                                <Checkbox id="response-store" checked={responseStore} onCheckedChange={(checked) => onResponseStoreChange(Boolean(checked))} />
+                              </div>
+                            </div>
+                            <div className="grid gap-3 rounded-2xl border border-stone-200 bg-stone-50 px-4 py-4">
+                              <div className="text-sm font-medium text-stone-700">系统指令</div>
+                              <Textarea
+                                value={responseInstructions}
+                                onChange={(event) => onResponseInstructionsChange(event.target.value)}
+                                placeholder="可选，补充给 Responses 主模型的 instructions"
+                                className="min-h-24 rounded-2xl border-stone-200 bg-white px-4 py-3 text-sm text-stone-700 shadow-none focus-visible:ring-0"
+                              />
                             </div>
                           </>
                         ) : (

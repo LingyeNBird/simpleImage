@@ -35,6 +35,16 @@ from services.image_options import (
     DEFAULT_IMAGE_UPSTREAM_ENDPOINT,
     DEFAULT_RESPONSE_CANVAS,
     DEFAULT_RESPONSE_MODERATION,
+    DEFAULT_RESPONSE_MAIN_MODEL,
+    DEFAULT_RESPONSE_TOOL_MODEL,
+    DEFAULT_RESPONSE_INSTRUCTIONS,
+    DEFAULT_RESPONSE_REASONING_EFFORT,
+    DEFAULT_RESPONSE_REASONING_SUMMARY,
+    DEFAULT_RESPONSE_PARALLEL_TOOL_CALLS,
+    DEFAULT_RESPONSE_INCLUDE_ENCRYPTED_REASONING,
+    DEFAULT_RESPONSE_STORE,
+    DEFAULT_RESPONSE_PARTIAL_IMAGES,
+    DEFAULT_RESPONSE_TOOL_CHOICE,
     DEFAULT_RESPONSE_OUTPUT_FORMAT,
     DEFAULT_RESPONSE_QUALITY,
     DEFAULT_RESPONSE_OUTPUT_COMPRESSION,
@@ -65,6 +75,16 @@ class ImageGenerationRequest(BaseModel):
     response_output_format: str = DEFAULT_RESPONSE_OUTPUT_FORMAT
     response_output_compression: int | None = DEFAULT_RESPONSE_OUTPUT_COMPRESSION
     response_moderation: str = DEFAULT_RESPONSE_MODERATION
+    response_main_model: str = DEFAULT_RESPONSE_MAIN_MODEL
+    response_tool_model: str = DEFAULT_RESPONSE_TOOL_MODEL
+    response_instructions: str = DEFAULT_RESPONSE_INSTRUCTIONS
+    response_reasoning_effort: str = DEFAULT_RESPONSE_REASONING_EFFORT
+    response_reasoning_summary: str = DEFAULT_RESPONSE_REASONING_SUMMARY
+    response_parallel_tool_calls: bool = DEFAULT_RESPONSE_PARALLEL_TOOL_CALLS
+    response_include_encrypted_reasoning: bool = DEFAULT_RESPONSE_INCLUDE_ENCRYPTED_REASONING
+    response_store: bool = DEFAULT_RESPONSE_STORE
+    response_partial_images: int = DEFAULT_RESPONSE_PARTIAL_IMAGES
+    response_tool_choice: str = DEFAULT_RESPONSE_TOOL_CHOICE
 
 
 class AccountCreateRequest(BaseModel):
@@ -129,6 +149,16 @@ class ImageJobCreateRequest(BaseModel):
     response_output_format: str = DEFAULT_RESPONSE_OUTPUT_FORMAT
     response_output_compression: int | None = DEFAULT_RESPONSE_OUTPUT_COMPRESSION
     response_moderation: str = DEFAULT_RESPONSE_MODERATION
+    response_main_model: str = DEFAULT_RESPONSE_MAIN_MODEL
+    response_tool_model: str = DEFAULT_RESPONSE_TOOL_MODEL
+    response_instructions: str = DEFAULT_RESPONSE_INSTRUCTIONS
+    response_reasoning_effort: str = DEFAULT_RESPONSE_REASONING_EFFORT
+    response_reasoning_summary: str = DEFAULT_RESPONSE_REASONING_SUMMARY
+    response_parallel_tool_calls: bool = DEFAULT_RESPONSE_PARALLEL_TOOL_CALLS
+    response_include_encrypted_reasoning: bool = DEFAULT_RESPONSE_INCLUDE_ENCRYPTED_REASONING
+    response_store: bool = DEFAULT_RESPONSE_STORE
+    response_partial_images: int = DEFAULT_RESPONSE_PARTIAL_IMAGES
+    response_tool_choice: str = DEFAULT_RESPONSE_TOOL_CHOICE
 
 
 class RedeemKeyGenerateRequest(BaseModel):
@@ -437,6 +467,16 @@ def _sanitize_image_job(job: Mapping[str, object]) -> dict[str, object]:
         job.get("response_output_format"),
         job.get("response_output_compression"),
         job.get("response_moderation"),
+        job.get("response_main_model"),
+        job.get("response_tool_model"),
+        job.get("response_instructions"),
+        job.get("response_reasoning_effort"),
+        job.get("response_reasoning_summary"),
+        job.get("response_parallel_tool_calls"),
+        job.get("response_include_encrypted_reasoning"),
+        job.get("response_store"),
+        job.get("response_partial_images"),
+        job.get("response_tool_choice"),
     )
     sanitized_result_images = []
     if isinstance(result_images, list):
@@ -483,6 +523,16 @@ def _sanitize_image_job(job: Mapping[str, object]) -> dict[str, object]:
         "response_output_format": response_options.output_format,
         "response_output_compression": response_options.output_compression,
         "response_moderation": response_options.moderation,
+        "response_main_model": response_options.main_model,
+        "response_tool_model": response_options.tool_model,
+        "response_instructions": response_options.instructions,
+        "response_reasoning_effort": response_options.reasoning_effort,
+        "response_reasoning_summary": response_options.reasoning_summary,
+        "response_parallel_tool_calls": response_options.parallel_tool_calls,
+        "response_include_encrypted_reasoning": response_options.include_encrypted_reasoning,
+        "response_store": response_options.store,
+        "response_partial_images": response_options.partial_images,
+        "response_tool_choice": response_options.tool_choice,
         "status": str(job.get("status") or "queued").strip() or "queued",
         "delivery_mode": "image_bed",
         "created_at": str(job.get("created_at") or "").strip(),
@@ -567,6 +617,16 @@ def create_app() -> FastAPI:
                 job.get("response_output_format"),
                 job.get("response_output_compression"),
                 job.get("response_moderation"),
+                job.get("response_main_model"),
+                job.get("response_tool_model"),
+                job.get("response_instructions"),
+                job.get("response_reasoning_effort"),
+                job.get("response_reasoning_summary"),
+                job.get("response_parallel_tool_calls"),
+                job.get("response_include_encrypted_reasoning"),
+                job.get("response_store"),
+                job.get("response_partial_images"),
+                job.get("response_tool_choice"),
             )
             mode = str(job.get("mode") or "generate").strip()
             if mode == "edit":
@@ -842,6 +902,16 @@ def create_app() -> FastAPI:
             body.response_output_format,
             body.response_output_compression,
             body.response_moderation,
+            body.response_main_model,
+            body.response_tool_model,
+            body.response_instructions,
+            body.response_reasoning_effort,
+            body.response_reasoning_summary,
+            body.response_parallel_tool_calls,
+            body.response_include_encrypted_reasoning,
+            body.response_store,
+            body.response_partial_images,
+            body.response_tool_choice,
         )
         try:
             result = await run_in_threadpool(
@@ -882,6 +952,16 @@ def create_app() -> FastAPI:
             response_output_format: str = Form(default=DEFAULT_RESPONSE_OUTPUT_FORMAT),
             response_output_compression: int | None = Form(default=DEFAULT_RESPONSE_OUTPUT_COMPRESSION),
             response_moderation: str = Form(default=DEFAULT_RESPONSE_MODERATION),
+            response_main_model: str = Form(default=DEFAULT_RESPONSE_MAIN_MODEL),
+            response_tool_model: str = Form(default=DEFAULT_RESPONSE_TOOL_MODEL),
+            response_instructions: str = Form(default=DEFAULT_RESPONSE_INSTRUCTIONS),
+            response_reasoning_effort: str = Form(default=DEFAULT_RESPONSE_REASONING_EFFORT),
+            response_reasoning_summary: str = Form(default=DEFAULT_RESPONSE_REASONING_SUMMARY),
+            response_parallel_tool_calls: bool = Form(default=DEFAULT_RESPONSE_PARALLEL_TOOL_CALLS),
+            response_include_encrypted_reasoning: bool = Form(default=DEFAULT_RESPONSE_INCLUDE_ENCRYPTED_REASONING),
+            response_store: bool = Form(default=DEFAULT_RESPONSE_STORE),
+            response_partial_images: int = Form(default=DEFAULT_RESPONSE_PARTIAL_IMAGES),
+            response_tool_choice: str = Form(default=DEFAULT_RESPONSE_TOOL_CHOICE),
     ):
         context = auth_service.require_authenticated(authorization)
         if n < 1 or n > 4:
@@ -896,6 +976,16 @@ def create_app() -> FastAPI:
             response_output_format,
             response_output_compression,
             response_moderation,
+            response_main_model,
+            response_tool_model,
+            response_instructions,
+            response_reasoning_effort,
+            response_reasoning_summary,
+            response_parallel_tool_calls,
+            response_include_encrypted_reasoning,
+            response_store,
+            response_partial_images,
+            response_tool_choice,
         )
 
         uploads = [*(image or []), *(image_list or [])]
@@ -962,6 +1052,16 @@ def create_app() -> FastAPI:
             response_output_format: str = Form(default=DEFAULT_RESPONSE_OUTPUT_FORMAT),
             response_output_compression: int | None = Form(default=DEFAULT_RESPONSE_OUTPUT_COMPRESSION),
             response_moderation: str = Form(default=DEFAULT_RESPONSE_MODERATION),
+            response_main_model: str = Form(default=DEFAULT_RESPONSE_MAIN_MODEL),
+            response_tool_model: str = Form(default=DEFAULT_RESPONSE_TOOL_MODEL),
+            response_instructions: str = Form(default=DEFAULT_RESPONSE_INSTRUCTIONS),
+            response_reasoning_effort: str = Form(default=DEFAULT_RESPONSE_REASONING_EFFORT),
+            response_reasoning_summary: str = Form(default=DEFAULT_RESPONSE_REASONING_SUMMARY),
+            response_parallel_tool_calls: bool = Form(default=DEFAULT_RESPONSE_PARALLEL_TOOL_CALLS),
+            response_include_encrypted_reasoning: bool = Form(default=DEFAULT_RESPONSE_INCLUDE_ENCRYPTED_REASONING),
+            response_store: bool = Form(default=DEFAULT_RESPONSE_STORE),
+            response_partial_images: int = Form(default=DEFAULT_RESPONSE_PARTIAL_IMAGES),
+            response_tool_choice: str = Form(default=DEFAULT_RESPONSE_TOOL_CHOICE),
     ):
         context = auth_service.require_authenticated(authorization)
         normalized_delivery_mode = _resolve_delivery_mode(context, delivery_mode)
@@ -978,6 +1078,16 @@ def create_app() -> FastAPI:
             response_output_format,
             response_output_compression,
             response_moderation,
+            response_main_model,
+            response_tool_model,
+            response_instructions,
+            response_reasoning_effort,
+            response_reasoning_summary,
+            response_parallel_tool_calls,
+            response_include_encrypted_reasoning,
+            response_store,
+            response_partial_images,
+            response_tool_choice,
         )
         _ensure_user_quota_or_raise(context, n)
         owner_role, user_id = _resolve_image_job_owner(context)
@@ -1010,6 +1120,16 @@ def create_app() -> FastAPI:
             response_output_format=response_options.output_format,
             response_output_compression=response_options.output_compression,
             response_moderation=response_options.moderation,
+            response_main_model=response_options.main_model,
+            response_tool_model=response_options.tool_model,
+            response_instructions=response_options.instructions,
+            response_reasoning_effort=response_options.reasoning_effort,
+            response_reasoning_summary=response_options.reasoning_summary,
+            response_parallel_tool_calls=response_options.parallel_tool_calls,
+            response_include_encrypted_reasoning=response_options.include_encrypted_reasoning,
+            response_store=response_options.store,
+            response_partial_images=response_options.partial_images,
+            response_tool_choice=response_options.tool_choice,
             reference_images=[],
         )
 

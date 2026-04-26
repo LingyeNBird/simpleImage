@@ -16,30 +16,58 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   ACTIVE_CONVERSATION_STORAGE_KEY,
   DEFAULT_IMAGE_RESPONSE_CANVAS,
+  DEFAULT_IMAGE_RESPONSE_INCLUDE_ENCRYPTED_REASONING,
+  DEFAULT_IMAGE_RESPONSE_INSTRUCTIONS,
+  DEFAULT_IMAGE_RESPONSE_MAIN_MODEL,
   DEFAULT_IMAGE_RESPONSE_MODERATION,
   DEFAULT_IMAGE_RESPONSE_OUTPUT_COMPRESSION,
   DEFAULT_IMAGE_RESPONSE_OUTPUT_FORMAT,
+  DEFAULT_IMAGE_RESPONSE_PARALLEL_TOOL_CALLS,
+  DEFAULT_IMAGE_RESPONSE_PARTIAL_IMAGES,
   DEFAULT_IMAGE_RESPONSE_QUALITY,
+  DEFAULT_IMAGE_RESPONSE_REASONING_EFFORT,
+  DEFAULT_IMAGE_RESPONSE_REASONING_SUMMARY,
   DEFAULT_IMAGE_RESPONSE_RESOLUTION,
+  DEFAULT_IMAGE_RESPONSE_STORE,
+  DEFAULT_IMAGE_RESPONSE_TOOL_CHOICE,
+  DEFAULT_IMAGE_RESPONSE_TOOL_MODEL,
   DEFAULT_IMAGE_SIZE,
   DEFAULT_IMAGE_UPSTREAM_ENDPOINT,
   IMAGE_RESPONSE_CANVAS_STORAGE_KEY,
+  IMAGE_RESPONSE_INCLUDE_ENCRYPTED_REASONING_STORAGE_KEY,
+  IMAGE_RESPONSE_INSTRUCTIONS_STORAGE_KEY,
+  IMAGE_RESPONSE_MAIN_MODEL_STORAGE_KEY,
   IMAGE_RESPONSE_MODERATION_STORAGE_KEY,
   IMAGE_RESPONSE_OUTPUT_COMPRESSION_STORAGE_KEY,
   IMAGE_RESPONSE_OUTPUT_FORMAT_STORAGE_KEY,
+  IMAGE_RESPONSE_PARALLEL_TOOL_CALLS_STORAGE_KEY,
+  IMAGE_RESPONSE_PARTIAL_IMAGES_STORAGE_KEY,
   IMAGE_RESPONSE_QUALITY_STORAGE_KEY,
+  IMAGE_RESPONSE_REASONING_EFFORT_STORAGE_KEY,
+  IMAGE_RESPONSE_REASONING_SUMMARY_STORAGE_KEY,
   IMAGE_RESPONSE_RESOLUTION_STORAGE_KEY,
+  IMAGE_RESPONSE_STORE_STORAGE_KEY,
+  IMAGE_RESPONSE_TOOL_CHOICE_STORAGE_KEY,
+  IMAGE_RESPONSE_TOOL_MODEL_STORAGE_KEY,
   IMAGE_SIZE_STORAGE_KEY,
   IMAGE_UPSTREAM_ENDPOINT_STORAGE_KEY,
+  isImageResponseReasoningEffort,
+  isImageResponseReasoningSummary,
   isImageResponseModeration,
   isImageResponseOutputFormat,
   isImageResponseResolution,
+  isImageResponseToolChoice,
+  normalizeImageResponsePartialImages,
+  parseImageResponseBoolean,
   normalizeImageResponseOutputCompression,
   type ImageResponseCanvas,
+  type ImageResponseReasoningEffort,
+  type ImageResponseReasoningSummary,
   type ImageResponseModeration,
   type ImageResponseOutputFormat,
   type ImageResponseQuality,
   type ImageResponseResolution,
+  type ImageResponseToolChoice,
   type ImageUpstreamEndpoint,
 } from "@/lib/image-generation-options";
 import {
@@ -216,6 +244,39 @@ function buildConversationFromImageJob(job: ImageJob): ImageConversation {
           typeof job.response_moderation === "string" && isImageResponseModeration(job.response_moderation)
             ? job.response_moderation
             : DEFAULT_IMAGE_RESPONSE_MODERATION,
+        responseMainModel:
+          typeof job.response_main_model === "string" && job.response_main_model.trim()
+            ? job.response_main_model.trim()
+            : DEFAULT_IMAGE_RESPONSE_MAIN_MODEL,
+        responseToolModel:
+          typeof job.response_tool_model === "string" && job.response_tool_model.trim()
+            ? job.response_tool_model.trim()
+            : DEFAULT_IMAGE_RESPONSE_TOOL_MODEL,
+        responseInstructions: typeof job.response_instructions === "string" ? job.response_instructions : DEFAULT_IMAGE_RESPONSE_INSTRUCTIONS,
+        responseReasoningEffort:
+          typeof job.response_reasoning_effort === "string" && isImageResponseReasoningEffort(job.response_reasoning_effort)
+            ? job.response_reasoning_effort
+            : DEFAULT_IMAGE_RESPONSE_REASONING_EFFORT,
+        responseReasoningSummary:
+          typeof job.response_reasoning_summary === "string" && isImageResponseReasoningSummary(job.response_reasoning_summary)
+            ? job.response_reasoning_summary
+            : DEFAULT_IMAGE_RESPONSE_REASONING_SUMMARY,
+        responseParallelToolCalls:
+          typeof job.response_parallel_tool_calls === "boolean"
+            ? job.response_parallel_tool_calls
+            : DEFAULT_IMAGE_RESPONSE_PARALLEL_TOOL_CALLS,
+        responseIncludeEncryptedReasoning:
+          typeof job.response_include_encrypted_reasoning === "boolean"
+            ? job.response_include_encrypted_reasoning
+            : DEFAULT_IMAGE_RESPONSE_INCLUDE_ENCRYPTED_REASONING,
+        responseStore: typeof job.response_store === "boolean" ? job.response_store : DEFAULT_IMAGE_RESPONSE_STORE,
+        responsePartialImages: normalizeImageResponsePartialImages(
+          String(job.response_partial_images ?? DEFAULT_IMAGE_RESPONSE_PARTIAL_IMAGES),
+        ),
+        responseToolChoice:
+          typeof job.response_tool_choice === "string" && isImageResponseToolChoice(job.response_tool_choice)
+            ? job.response_tool_choice
+            : DEFAULT_IMAGE_RESPONSE_TOOL_CHOICE,
         referenceImages: [],
         count: job.count,
         size: job.size || DEFAULT_IMAGE_SIZE,
@@ -360,6 +421,16 @@ export default function ImagePage() {
   const [responseOutputFormat, setResponseOutputFormat] = useState<ImageResponseOutputFormat>(DEFAULT_IMAGE_RESPONSE_OUTPUT_FORMAT);
   const [responseOutputCompression, setResponseOutputCompression] = useState(DEFAULT_IMAGE_RESPONSE_OUTPUT_COMPRESSION);
   const [responseModeration, setResponseModeration] = useState<ImageResponseModeration>(DEFAULT_IMAGE_RESPONSE_MODERATION);
+  const [responseMainModel, setResponseMainModel] = useState(DEFAULT_IMAGE_RESPONSE_MAIN_MODEL);
+  const [responseToolModel, setResponseToolModel] = useState(DEFAULT_IMAGE_RESPONSE_TOOL_MODEL);
+  const [responseInstructions, setResponseInstructions] = useState(DEFAULT_IMAGE_RESPONSE_INSTRUCTIONS);
+  const [responseReasoningEffort, setResponseReasoningEffort] = useState<ImageResponseReasoningEffort>(DEFAULT_IMAGE_RESPONSE_REASONING_EFFORT);
+  const [responseReasoningSummary, setResponseReasoningSummary] = useState<ImageResponseReasoningSummary>(DEFAULT_IMAGE_RESPONSE_REASONING_SUMMARY);
+  const [responseParallelToolCalls, setResponseParallelToolCalls] = useState(DEFAULT_IMAGE_RESPONSE_PARALLEL_TOOL_CALLS);
+  const [responseIncludeEncryptedReasoning, setResponseIncludeEncryptedReasoning] = useState(DEFAULT_IMAGE_RESPONSE_INCLUDE_ENCRYPTED_REASONING);
+  const [responseStore, setResponseStore] = useState(DEFAULT_IMAGE_RESPONSE_STORE);
+  const [responsePartialImages, setResponsePartialImages] = useState(DEFAULT_IMAGE_RESPONSE_PARTIAL_IMAGES);
+  const [responseToolChoice, setResponseToolChoice] = useState<ImageResponseToolChoice>(DEFAULT_IMAGE_RESPONSE_TOOL_CHOICE);
   const [imageMode, setImageMode] = useState<ImageConversationMode>("generate");
   const [referenceImageFiles, setReferenceImageFiles] = useState<File[]>([]);
   const [referenceImages, setReferenceImages] = useState<StoredReferenceImage[]>([]);
@@ -509,6 +580,49 @@ export default function ImagePage() {
             const storedResponseModeration = window.localStorage.getItem(IMAGE_RESPONSE_MODERATION_STORAGE_KEY);
             if (storedResponseModeration && isImageResponseModeration(storedResponseModeration)) {
               setResponseModeration(storedResponseModeration);
+            }
+            const storedResponseMainModel = window.localStorage.getItem(IMAGE_RESPONSE_MAIN_MODEL_STORAGE_KEY);
+            if (storedResponseMainModel?.trim()) {
+              setResponseMainModel(storedResponseMainModel.trim());
+            }
+            const storedResponseToolModel = window.localStorage.getItem(IMAGE_RESPONSE_TOOL_MODEL_STORAGE_KEY);
+            if (storedResponseToolModel?.trim()) {
+              setResponseToolModel(storedResponseToolModel.trim());
+            }
+            const storedResponseInstructions = window.localStorage.getItem(IMAGE_RESPONSE_INSTRUCTIONS_STORAGE_KEY);
+            if (storedResponseInstructions !== null) {
+              setResponseInstructions(storedResponseInstructions);
+            }
+            const storedResponseReasoningEffort = window.localStorage.getItem(IMAGE_RESPONSE_REASONING_EFFORT_STORAGE_KEY);
+            if (storedResponseReasoningEffort && isImageResponseReasoningEffort(storedResponseReasoningEffort)) {
+              setResponseReasoningEffort(storedResponseReasoningEffort);
+            }
+            const storedResponseReasoningSummary = window.localStorage.getItem(IMAGE_RESPONSE_REASONING_SUMMARY_STORAGE_KEY);
+            if (storedResponseReasoningSummary && isImageResponseReasoningSummary(storedResponseReasoningSummary)) {
+              setResponseReasoningSummary(storedResponseReasoningSummary);
+            }
+            setResponseParallelToolCalls(
+              parseImageResponseBoolean(
+                window.localStorage.getItem(IMAGE_RESPONSE_PARALLEL_TOOL_CALLS_STORAGE_KEY),
+                DEFAULT_IMAGE_RESPONSE_PARALLEL_TOOL_CALLS,
+              ),
+            );
+            setResponseIncludeEncryptedReasoning(
+              parseImageResponseBoolean(
+                window.localStorage.getItem(IMAGE_RESPONSE_INCLUDE_ENCRYPTED_REASONING_STORAGE_KEY),
+                DEFAULT_IMAGE_RESPONSE_INCLUDE_ENCRYPTED_REASONING,
+              ),
+            );
+            setResponseStore(
+              parseImageResponseBoolean(window.localStorage.getItem(IMAGE_RESPONSE_STORE_STORAGE_KEY), DEFAULT_IMAGE_RESPONSE_STORE),
+            );
+            const storedResponsePartialImages = window.localStorage.getItem(IMAGE_RESPONSE_PARTIAL_IMAGES_STORAGE_KEY);
+            if (storedResponsePartialImages) {
+              setResponsePartialImages(normalizeImageResponsePartialImages(storedResponsePartialImages));
+            }
+            const storedResponseToolChoice = window.localStorage.getItem(IMAGE_RESPONSE_TOOL_CHOICE_STORAGE_KEY);
+            if (storedResponseToolChoice && isImageResponseToolChoice(storedResponseToolChoice)) {
+              setResponseToolChoice(storedResponseToolChoice);
             }
           }
           const items = await listImageConversations();
@@ -673,6 +787,89 @@ export default function ImagePage() {
 
     window.localStorage.setItem(IMAGE_RESPONSE_MODERATION_STORAGE_KEY, responseModeration);
   }, [responseModeration]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    window.localStorage.setItem(IMAGE_RESPONSE_MAIN_MODEL_STORAGE_KEY, responseMainModel);
+  }, [responseMainModel]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    window.localStorage.setItem(IMAGE_RESPONSE_TOOL_MODEL_STORAGE_KEY, responseToolModel);
+  }, [responseToolModel]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    window.localStorage.setItem(IMAGE_RESPONSE_INSTRUCTIONS_STORAGE_KEY, responseInstructions);
+  }, [responseInstructions]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    window.localStorage.setItem(IMAGE_RESPONSE_REASONING_EFFORT_STORAGE_KEY, responseReasoningEffort);
+  }, [responseReasoningEffort]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    window.localStorage.setItem(IMAGE_RESPONSE_REASONING_SUMMARY_STORAGE_KEY, responseReasoningSummary);
+  }, [responseReasoningSummary]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    window.localStorage.setItem(IMAGE_RESPONSE_PARALLEL_TOOL_CALLS_STORAGE_KEY, String(responseParallelToolCalls));
+  }, [responseParallelToolCalls]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    window.localStorage.setItem(
+      IMAGE_RESPONSE_INCLUDE_ENCRYPTED_REASONING_STORAGE_KEY,
+      String(responseIncludeEncryptedReasoning),
+    );
+  }, [responseIncludeEncryptedReasoning]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    window.localStorage.setItem(IMAGE_RESPONSE_STORE_STORAGE_KEY, String(responseStore));
+  }, [responseStore]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    window.localStorage.setItem(IMAGE_RESPONSE_PARTIAL_IMAGES_STORAGE_KEY, responsePartialImages);
+  }, [responsePartialImages]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    window.localStorage.setItem(IMAGE_RESPONSE_TOOL_CHOICE_STORAGE_KEY, responseToolChoice);
+  }, [responseToolChoice]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -972,6 +1169,16 @@ export default function ImagePage() {
                     queuedTurn.responseOutputFormat,
                     queuedTurn.responseOutputCompression,
                     queuedTurn.responseModeration,
+                    queuedTurn.responseMainModel,
+                    queuedTurn.responseToolModel,
+                    queuedTurn.responseInstructions,
+                    queuedTurn.responseReasoningEffort,
+                    queuedTurn.responseReasoningSummary,
+                    queuedTurn.responseParallelToolCalls,
+                    queuedTurn.responseIncludeEncryptedReasoning,
+                    queuedTurn.responseStore,
+                    queuedTurn.responsePartialImages,
+                    queuedTurn.responseToolChoice,
                   )
                 : await generateImage(
                     queuedTurn.prompt,
@@ -985,6 +1192,16 @@ export default function ImagePage() {
                     queuedTurn.responseOutputFormat,
                     queuedTurn.responseOutputCompression,
                     queuedTurn.responseModeration,
+                    queuedTurn.responseMainModel,
+                    queuedTurn.responseToolModel,
+                    queuedTurn.responseInstructions,
+                    queuedTurn.responseReasoningEffort,
+                    queuedTurn.responseReasoningSummary,
+                    queuedTurn.responseParallelToolCalls,
+                    queuedTurn.responseIncludeEncryptedReasoning,
+                    queuedTurn.responseStore,
+                    queuedTurn.responsePartialImages,
+                    queuedTurn.responseToolChoice,
                   );
             const first = data.data?.[0];
             if (!first?.b64_json && !first?.url) {
@@ -1161,6 +1378,16 @@ export default function ImagePage() {
       responseOutputFormat,
       responseOutputCompression,
       responseModeration,
+      responseMainModel,
+      responseToolModel,
+      responseInstructions,
+      responseReasoningEffort,
+      responseReasoningSummary,
+      responseParallelToolCalls,
+      responseIncludeEncryptedReasoning,
+      responseStore,
+      responsePartialImages,
+      responseToolChoice,
       referenceImages: imageMode === "edit" ? referenceImages : [],
       count: parsedCount,
       size: imageSize,
@@ -1207,6 +1434,16 @@ export default function ImagePage() {
           responseOutputFormat,
           responseOutputCompression,
           responseModeration,
+          responseMainModel,
+          responseToolModel,
+          responseInstructions,
+          responseReasoningEffort,
+          responseReasoningSummary,
+          responseParallelToolCalls,
+          responseIncludeEncryptedReasoning,
+          responseStore,
+          responsePartialImages,
+          responseToolChoice,
           model: "auto",
           files: imageMode === "edit" ? referenceImageFiles : [],
         });
@@ -1444,6 +1681,16 @@ export default function ImagePage() {
             responseOutputFormat={responseOutputFormat}
             responseOutputCompression={responseOutputCompression}
             responseModeration={responseModeration}
+            responseMainModel={responseMainModel}
+            responseToolModel={responseToolModel}
+            responseInstructions={responseInstructions}
+            responseReasoningEffort={responseReasoningEffort}
+            responseReasoningSummary={responseReasoningSummary}
+            responseParallelToolCalls={responseParallelToolCalls}
+            responseIncludeEncryptedReasoning={responseIncludeEncryptedReasoning}
+            responseStore={responseStore}
+            responsePartialImages={responsePartialImages}
+            responseToolChoice={responseToolChoice}
             deliveryMode={deliveryMode}
             availableDeliveryModes={availableDeliveryModes}
             showAllDeliveryModes={currentIdentity?.role === "admin"}
@@ -1462,6 +1709,16 @@ export default function ImagePage() {
             onResponseOutputFormatChange={setResponseOutputFormat}
             onResponseOutputCompressionChange={(value) => setResponseOutputCompression(normalizeImageResponseOutputCompression(value))}
             onResponseModerationChange={setResponseModeration}
+            onResponseMainModelChange={setResponseMainModel}
+            onResponseToolModelChange={setResponseToolModel}
+            onResponseInstructionsChange={setResponseInstructions}
+            onResponseReasoningEffortChange={setResponseReasoningEffort}
+            onResponseReasoningSummaryChange={setResponseReasoningSummary}
+            onResponseParallelToolCallsChange={setResponseParallelToolCalls}
+            onResponseIncludeEncryptedReasoningChange={setResponseIncludeEncryptedReasoning}
+            onResponseStoreChange={setResponseStore}
+            onResponsePartialImagesChange={(value) => setResponsePartialImages(normalizeImageResponsePartialImages(value))}
+            onResponseToolChoiceChange={setResponseToolChoice}
             onDeliveryModeChange={setDeliveryMode}
             onSubmit={handleSubmit}
             onPickReferenceImage={() => fileInputRef.current?.click()}
