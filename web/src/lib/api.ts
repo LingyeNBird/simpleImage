@@ -165,6 +165,8 @@ type AccountUpdateResponse = {
 export type SettingsConfig = {
   proxy: string;
   base_url?: string;
+  cpa_image_base_url?: string;
+  cpa_image_api_key?: string;
   "auth-key"?: string;
   refresh_account_interval_minute?: number | string;
   image_bed_cleanup_days?: number | string;

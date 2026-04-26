@@ -67,7 +67,7 @@ export const IMAGE_SIZE_LABELS: Record<string, string> = {
 
 export const IMAGE_UPSTREAM_ENDPOINT_OPTIONS: Array<{ value: ImageUpstreamEndpoint; label: string; description: string }> = [
   { value: "conversation", label: "/conversation", description: "兼容当前 ChatGPT 对话型生图链路，支持比例设置" },
-  { value: "response", label: "/response", description: "使用 Responses 风格上游，请求更直接，支持画布/分辨率/质量" },
+  { value: "response", label: "CPA /v1/images", description: "通过已配置的 CPA 图片端点发起生成 / 编辑，支持质量、格式等图片参数" },
 ];
 
 export const IMAGE_RESPONSE_CANVAS_OPTIONS: Array<{ value: ImageResponseCanvas; label: string }> = [

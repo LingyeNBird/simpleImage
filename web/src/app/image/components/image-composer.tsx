@@ -174,7 +174,7 @@ export function ImageComposer({
     void onReferenceImageChange(imageFiles);
   };
 
-  const settingsSummary = `${mode === "edit" ? "图生图" : "文生图"} · ${imageCount || "1"} 张 · ${isResponseEndpoint ? "/response" : "/conversation"}${visibleDeliveryModes.length > 1 ? ` · ${deliveryMode === "image_bed" ? "图床" : "直传"}` : ""}`;
+  const settingsSummary = `${mode === "edit" ? "图生图" : "文生图"} · ${imageCount || "1"} 张 · ${isResponseEndpoint ? "CPA /v1/images" : "/conversation"}${visibleDeliveryModes.length > 1 ? ` · ${deliveryMode === "image_bed" ? "图床" : "直传"}` : ""}`;
 
   return (
     <div className="shrink-0 flex justify-center">
@@ -307,7 +307,7 @@ export function ImageComposer({
                             description="优先放常用项，移动端打开后能更快完成核心配置。"
                           >
                             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                              <SettingsField label="上游端点" hint="切换 /conversation 与 /response 两条上游调用链。">
+                              <SettingsField label="上游端点" hint="切换 ChatGPT 对话链路与 CPA 图片端点链路。">
                                 <Select value={upstreamEndpoint} onValueChange={(value) => onUpstreamEndpointChange(value as ImageUpstreamEndpoint)}>
                                   <SelectTrigger className={SETTINGS_CONTROL_CLASS}>
                                     <SelectValue />
@@ -398,7 +398,7 @@ export function ImageComposer({
 
                           {isResponseEndpoint ? (
                             <>
-                              <SettingsSection title="图像输出" description="控制响应式生图的画布、质量和输出形态。">
+                              <SettingsSection title="图像输出" description="控制 CPA 图片端点的画布、质量和输出形态。">
                                 <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                                   <SettingsField label="画布" hint="决定生成区域与边距倾向。">
                                     <Select value={responseCanvas} onValueChange={(value) => onResponseCanvasChange(value as ImageResponseCanvas)}>
@@ -491,9 +491,9 @@ export function ImageComposer({
                                 </div>
                               </SettingsSection>
 
-                              <SettingsSection title="模型与推理" description="把模型、推理和预览参数集中管理，减少来回滚动。">
+                              <SettingsSection title="模型与参数" description="CPA 图片端点主要使用图片模型与兼容参数；部分旧 responses 字段仅作兼容保留。">
                                 <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                                  <SettingsField label="主模型" hint="Responses 主流程使用的模型名称。">
+                                  <SettingsField label="主模型" hint="兼容保留字段；CPA 图片端点不会直接使用该主模型。">
                                     <Input
                                       value={responseMainModel}
                                       onChange={(event) => onResponseMainModelChange(event.target.value)}
@@ -501,7 +501,7 @@ export function ImageComposer({
                                     />
                                   </SettingsField>
 
-                                  <SettingsField label="工具模型" hint="用于图像工具调用的模型，可留 auto 自动决策。">
+                                  <SettingsField label="图片模型" hint="CPA 图片端点实际优先使用这里的模型；留 auto 时回退到当前请求模型或 gpt-image-2。">
                                     <Input
                                       value={responseToolModel}
                                       onChange={(event) => onResponseToolModelChange(event.target.value)}

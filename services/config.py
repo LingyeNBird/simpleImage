@@ -142,6 +142,14 @@ class ConfigStore:
     def get_proxy_settings(self) -> str:
         return str(self.data.get("proxy") or "").strip()
 
+    @property
+    def cpa_image_base_url(self) -> str:
+        return str(self.data.get("cpa_image_base_url") or "").strip().rstrip("/")
+
+    @property
+    def cpa_image_api_key(self) -> str:
+        return str(self.data.get("cpa_image_api_key") or "").strip()
+
     def update(self, data: dict[str, object]) -> dict[str, object]:
         self.data = dict(data or {})
         self._save()

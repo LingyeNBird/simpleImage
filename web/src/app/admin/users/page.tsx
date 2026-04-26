@@ -53,7 +53,10 @@ export default function AdminUsersPage() {
     allow_direct_mode: true,
     allow_image_bed_mode: true,
   });
+  const [cpaImageBaseUrl, setCpaImageBaseUrl] = useState("");
+  const [cpaImageApiKey, setCpaImageApiKey] = useState("");
   const [isSavingRegisterDefaults, setIsSavingRegisterDefaults] = useState(false);
+  const [isSavingCpaConfig, setIsSavingCpaConfig] = useState(false);
 
   const userCount = users.length;
   const totalQuota = useMemo(
@@ -80,6 +83,8 @@ export default function AdminUsersPage() {
         allow_direct_mode: settingsData.config.register_user_allow_direct_mode !== false,
         allow_image_bed_mode: settingsData.config.register_user_allow_image_bed_mode !== false,
       });
+      setCpaImageBaseUrl(typeof settingsData.config.cpa_image_base_url === "string" ? settingsData.config.cpa_image_base_url : "");
+      setCpaImageApiKey(typeof settingsData.config.cpa_image_api_key === "string" ? settingsData.config.cpa_image_api_key : "");
     } catch (error) {
       const message = error instanceof Error ? error.message : "加载用户失败";
       toast.error(message);
@@ -87,6 +92,33 @@ export default function AdminUsersPage() {
       if (!silent) {
         setIsLoading(false);
       }
+    }
+  };
+
+  const handleSaveCpaConfig = async () => {
+    const normalizedBaseUrl = cpaImageBaseUrl.trim().replace(/\/$/, "");
+    const normalizedApiKey = cpaImageApiKey.trim();
+    if (!normalizedBaseUrl || !normalizedApiKey) {
+      toast.error("请填写 CPA 端点地址和 API key");
+      return;
+    }
+
+    setIsSavingCpaConfig(true);
+    try {
+      const nextConfig: SettingsConfig = {
+        ...(await fetchSettingsConfig()).config,
+        cpa_image_base_url: normalizedBaseUrl,
+        cpa_image_api_key: normalizedApiKey,
+      };
+      await updateSettingsConfig(nextConfig);
+      setCpaImageBaseUrl(normalizedBaseUrl);
+      setCpaImageApiKey(normalizedApiKey);
+      toast.success("CPA 图片端点配置已保存");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "保存 CPA 图片端点配置失败";
+      toast.error(message);
+    } finally {
+      setIsSavingCpaConfig(false);
     }
   };
 
@@ -363,6 +395,46 @@ export default function AdminUsersPage() {
               >
                 {isSavingRegisterDefaults ? <LoaderCircle className="size-4 animate-spin" /> : null}
                 保存注册默认权限
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="rounded-2xl border-white/80 bg-white/90 shadow-sm">
+          <CardContent className="space-y-4 p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-semibold tracking-tight">CPA 图片端点</h2>
+                <p className="mt-1 text-sm text-stone-500">为 “CPA /v1/images” 上游配置基础地址与 API key。保存后，图片页选择该上游端点时会走 CPA 的 `/v1/images/generations` 与 `/v1/images/edits`。</p>
+              </div>
+              <Badge variant="secondary" className="rounded-md bg-stone-100 text-stone-700">
+                CPA Upstream
+              </Badge>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Input
+                value={cpaImageBaseUrl}
+                onChange={(event) => setCpaImageBaseUrl(event.target.value)}
+                placeholder="https://your-cpa.example.com"
+                className="h-11 rounded-xl border-stone-200 bg-white"
+              />
+              <Input
+                type="password"
+                value={cpaImageApiKey}
+                onChange={(event) => setCpaImageApiKey(event.target.value)}
+                placeholder="CPA API key"
+                className="h-11 rounded-xl border-stone-200 bg-white"
+              />
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-xs text-stone-500">建议填写服务根地址即可，系统会自动拼接 `/v1/images/generations` 与 `/v1/images/edits`。</p>
+              <Button
+                variant="outline"
+                className="h-10 rounded-xl border-stone-200 bg-white px-4 text-stone-700"
+                onClick={() => void handleSaveCpaConfig()}
+                disabled={isSavingCpaConfig}
+              >
+                {isSavingCpaConfig ? <LoaderCircle className="size-4 animate-spin" /> : null}
+                保存 CPA 配置
               </Button>
             </div>
           </CardContent>
