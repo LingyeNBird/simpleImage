@@ -101,10 +101,27 @@ def _extract_error_text(response: object) -> str:
     return body[:1200] if body else f"CPA request failed: {status_code}"
 
 
+def _public_cpa_error_message(kind: str = "generate") -> str:
+    if kind == "edit":
+        return "图片编辑失败，请稍后重试或联系管理员检查 CPA 图片服务配置"
+    return "图片生成失败，请稍后重试或联系管理员检查 CPA 图片服务配置"
+
+
 def _download_remote_image(session: Session, url: str, fallback_mime_type: str) -> tuple[bytes, str]:
-    response = session.get(url, timeout=180)
+    try:
+        response = session.get(url, timeout=180)
+    except Exception as exc:
+        raise ImageGenerationError(
+            f"failed to download CPA image url: {exc}",
+            failure_log=f"download_url={url}\nerror={exc}",
+            public_message="图片下载失败，请稍后重试或联系管理员",
+        ) from exc
     if not response.ok:
-        raise ImageGenerationError(f"failed to download CPA image url: {response.status_code}")
+        raise ImageGenerationError(
+            f"failed to download CPA image url: {response.status_code}",
+            failure_log=f"download_url={url}\nstatus_code={response.status_code}\nresponse_body:\n{_extract_error_text(response)}",
+            public_message="图片下载失败，请稍后重试或联系管理员",
+        )
     content = response.content
     if not content:
         raise ImageGenerationError("CPA image url returned empty body")
@@ -141,7 +158,10 @@ def _normalize_result_item(
 
     url = str(item.get("url") or "").strip()
     if not url:
-        raise ImageGenerationError("CPA image payload did not include b64_json or url")
+        raise ImageGenerationError(
+            "CPA image payload did not include b64_json or url",
+            public_message="图片生成失败，请稍后重试或联系管理员",
+        )
     if str(delivery_mode or "direct").strip() != "direct" or str(response_format or "b64_json").strip() != "url":
         image_bytes, mime_type = _download_remote_image(session, url, output_mime_type)
         return build_result_data_from_bytes(
@@ -176,12 +196,19 @@ def generate_image_result_via_cpa(
     payload = _build_generation_payload(prompt, model, count, response_format, size, options)
     session = _new_session()
     try:
-        response = session.post(
-            f"{request_base_url}/v1/images/generations",
-            headers=_build_headers(api_key),
-            json=payload,
-            timeout=180,
-        )
+        try:
+            response = session.post(
+                f"{request_base_url}/v1/images/generations",
+                headers=_build_headers(api_key),
+                json=payload,
+                timeout=180,
+            )
+        except Exception as exc:
+            raise ImageGenerationError(
+                f"CPA transport request failed: {exc}",
+                failure_log=f"request_url={request_base_url}/v1/images/generations\nerror={exc}",
+                public_message=_public_cpa_error_message("generate"),
+            ) from exc
         if not response.ok:
             raise ImageGenerationError(
                 _extract_error_text(response),
@@ -190,11 +217,12 @@ def generate_image_result_via_cpa(
                     f"request_url={request_base_url}/v1/images/generations\n"
                     f"response_body:\n{_extract_error_text(response)}"
                 ),
+                public_message=_public_cpa_error_message("generate"),
             )
         payload_data = response.json()
         data = payload_data.get("data") if isinstance(payload_data, dict) else None
         if not isinstance(data, list) or not data:
-            raise ImageGenerationError("CPA image response is invalid")
+            raise ImageGenerationError("CPA image response is invalid", public_message=_public_cpa_error_message("generate"))
         result_items = [
             _normalize_result_item(
                 session,
@@ -209,7 +237,7 @@ def generate_image_result_via_cpa(
             if isinstance(item, dict)
         ]
         if not result_items:
-            raise ImageGenerationError("CPA image response returned no valid images")
+            raise ImageGenerationError("CPA image response returned no valid images", public_message=_public_cpa_error_message("generate"))
         return {"created": int(payload_data.get("created") or 0), "data": result_items}
     finally:
         session.close()
@@ -246,13 +274,20 @@ def edit_image_result_via_cpa(
     form_payload = _build_edit_form_payload(payload)
     session = _new_session()
     try:
-        response = session.post(
-            f"{request_base_url}/v1/images/edits",
-            headers=_build_headers(api_key),
-            data=form_payload,
-            multipart=multipart,
-            timeout=180,
-        )
+        try:
+            response = session.post(
+                f"{request_base_url}/v1/images/edits",
+                headers=_build_headers(api_key),
+                data=form_payload,
+                multipart=multipart,
+                timeout=180,
+            )
+        except Exception as exc:
+            raise ImageGenerationError(
+                f"CPA transport request failed: {exc}",
+                failure_log=f"request_url={request_base_url}/v1/images/edits\nerror={exc}",
+                public_message=_public_cpa_error_message("edit"),
+            ) from exc
         if not response.ok:
             raise ImageGenerationError(
                 _extract_error_text(response),
@@ -261,11 +296,12 @@ def edit_image_result_via_cpa(
                     f"request_url={request_base_url}/v1/images/edits\n"
                     f"response_body:\n{_extract_error_text(response)}"
                 ),
+                public_message=_public_cpa_error_message("edit"),
             )
         payload_data = response.json()
         data = payload_data.get("data") if isinstance(payload_data, dict) else None
         if not isinstance(data, list) or not data:
-            raise ImageGenerationError("CPA image response is invalid")
+            raise ImageGenerationError("CPA image response is invalid", public_message=_public_cpa_error_message("edit"))
         result_items = [
             _normalize_result_item(
                 session,
@@ -280,7 +316,7 @@ def edit_image_result_via_cpa(
             if isinstance(item, dict)
         ]
         if not result_items:
-            raise ImageGenerationError("CPA image response returned no valid images")
+            raise ImageGenerationError("CPA image response returned no valid images", public_message=_public_cpa_error_message("edit"))
         return {"created": int(payload_data.get("created") or 0), "data": result_items}
     finally:
         session.close()

@@ -439,6 +439,15 @@ def _build_image_failure_log(
     return "\n\n".join(sections)
 
 
+def _visible_image_error_message(exc: Exception, *, include_sensitive: bool) -> str:
+    if include_sensitive:
+        return str(exc)
+    public_message = getattr(exc, "public_message", None)
+    if isinstance(public_message, str) and public_message.strip():
+        return public_message.strip()
+    return "图片生成失败，请稍后重试"
+
+
 def _consume_user_quota_after_success(context: AuthContext, generated_count: int) -> dict[str, object] | None:
     if context.is_admin:
         return None
@@ -732,7 +741,7 @@ def create_app() -> FastAPI:
             image_job_service.update_job_status(
                 job_id,
                 status="error",
-                error=str(exc),
+                error=_visible_image_error_message(exc, include_sensitive=False),
                 failure_log=_build_image_failure_log(
                     exc,
                     stage="async_job",
@@ -989,7 +998,7 @@ def create_app() -> FastAPI:
                 response_options,
             )
         except ImageGenerationError as exc:
-            detail = {"error": str(exc)}
+            detail = {"error": _visible_image_error_message(exc, include_sensitive=_can_view_image_failure_log(context))}
             if _can_view_image_failure_log(context):
                 detail["failure_log"] = _build_image_failure_log(
                     exc,
@@ -1093,7 +1102,7 @@ def create_app() -> FastAPI:
                 response_options,
             )
         except ImageGenerationError as exc:
-            detail = {"error": str(exc)}
+            detail = {"error": _visible_image_error_message(exc, include_sensitive=_can_view_image_failure_log(context))}
             if _can_view_image_failure_log(context):
                 detail["failure_log"] = _build_image_failure_log(
                     exc,
