@@ -59,6 +59,27 @@ def _resolve_cpa_model(requested_model: str, options: ImageResponseOptions) -> s
     return "gpt-image-2"
 
 
+def _resolve_cpa_size(size: str | None, options: ImageResponseOptions) -> str | None:
+    resolution = str(options.resolution or "").strip().lower()
+    if resolution and resolution != "auto":
+        return resolution
+
+    normalized_size = str(size or "").strip().lower()
+    if not normalized_size:
+        return None
+    if "x" in normalized_size:
+        return normalized_size
+
+    ratio_map = {
+        "1:1": "1024x1024",
+        "16:9": "1536x864",
+        "9:16": "864x1536",
+        "4:3": "1536x1152",
+        "3:4": "1152x1536",
+    }
+    return ratio_map.get(normalized_size, normalized_size)
+
+
 def _build_generation_payload(
     prompt: str,
     requested_model: str,
@@ -73,8 +94,9 @@ def _build_generation_payload(
         "response_format": response_format,
         "n": max(1, int(count or 1)),
     }
-    if str(size or "").strip():
-        payload["size"] = str(size).strip()
+    resolved_size = _resolve_cpa_size(size, options)
+    if resolved_size:
+        payload["size"] = resolved_size
     if options.quality != "auto":
         payload["quality"] = options.quality
     if options.output_format:
