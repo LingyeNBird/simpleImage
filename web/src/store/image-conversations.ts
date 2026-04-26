@@ -4,11 +4,19 @@ import localforage from "localforage";
 
 import type {
   ImageResponseCanvas,
+  ImageResponseModeration,
+  ImageResponseOutputFormat,
   ImageResponseQuality,
   ImageResponseResolution,
   ImageUpstreamEndpoint,
 } from "@/lib/image-generation-options";
-import { isImageResponseResolution } from "@/lib/image-generation-options";
+import {
+  DEFAULT_IMAGE_RESPONSE_OUTPUT_COMPRESSION,
+  isImageResponseModeration,
+  isImageResponseOutputFormat,
+  isImageResponseResolution,
+  normalizeImageResponseOutputCompression,
+} from "@/lib/image-generation-options";
 import type { ImageDeliveryMode, ImageModel } from "@/lib/api";
 
 export type ImageConversationMode = "generate" | "edit";
@@ -42,7 +50,10 @@ export type ImageTurn = {
    responseCanvas: ImageResponseCanvas;
    responseResolution: ImageResponseResolution;
    responseQuality: ImageResponseQuality;
-  referenceImages: StoredReferenceImage[];
+   responseOutputFormat: ImageResponseOutputFormat;
+   responseOutputCompression: string;
+   responseModeration: ImageResponseModeration;
+   referenceImages: StoredReferenceImage[];
   count: number;
   size: string;
   images: StoredImage[];
@@ -147,6 +158,13 @@ function normalizeTurn(turn: ImageTurn & Record<string, unknown>): ImageTurn {
       turn.responseQuality === "low" || turn.responseQuality === "medium" || turn.responseQuality === "high"
         ? turn.responseQuality
         : "auto",
+    responseOutputFormat:
+      typeof turn.responseOutputFormat === "string" && isImageResponseOutputFormat(turn.responseOutputFormat)
+        ? turn.responseOutputFormat
+        : "png",
+    responseOutputCompression: normalizeImageResponseOutputCompression(String(turn.responseOutputCompression || DEFAULT_IMAGE_RESPONSE_OUTPUT_COMPRESSION)),
+    responseModeration:
+      typeof turn.responseModeration === "string" && isImageResponseModeration(turn.responseModeration) ? turn.responseModeration : "auto",
     referenceImages: getLegacyReferenceImages(turn),
     count: Math.max(1, Number(turn.count || normalizedImages.length || 1)),
     size: String(turn.size || "1:1"),
@@ -187,6 +205,17 @@ function normalizeConversation(conversation: ImageConversation & Record<string, 
             conversation.responseQuality === "medium" ||
             conversation.responseQuality === "high"
               ? conversation.responseQuality
+              : "auto",
+          responseOutputFormat:
+            typeof conversation.responseOutputFormat === "string" && isImageResponseOutputFormat(conversation.responseOutputFormat)
+              ? conversation.responseOutputFormat
+              : "png",
+          responseOutputCompression: normalizeImageResponseOutputCompression(
+            String(conversation.responseOutputCompression || DEFAULT_IMAGE_RESPONSE_OUTPUT_COMPRESSION),
+          ),
+          responseModeration:
+            typeof conversation.responseModeration === "string" && isImageResponseModeration(conversation.responseModeration)
+              ? conversation.responseModeration
               : "auto",
           referenceImages: getLegacyReferenceImages(conversation),
           count: Number(conversation.count || 1),

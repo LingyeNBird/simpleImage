@@ -1,6 +1,8 @@
 import { httpRequest } from "@/lib/request";
 import type {
   ImageResponseCanvas,
+  ImageResponseModeration,
+  ImageResponseOutputFormat,
   ImageResponseQuality,
   ImageResponseResolution,
   ImageUpstreamEndpoint,
@@ -52,6 +54,9 @@ export type ImageJob = {
   response_canvas?: ImageResponseCanvas;
   response_resolution?: ImageResponseResolution;
   response_quality?: ImageResponseQuality;
+  response_output_format?: ImageResponseOutputFormat;
+  response_output_compression?: number | null;
+  response_moderation?: ImageResponseModeration;
   status: "queued" | "running" | "success" | "error";
   delivery_mode: "image_bed";
   created_at: string;
@@ -339,7 +344,11 @@ export async function generateImage(
   responseCanvas: ImageResponseCanvas = "auto",
   responseResolution: ImageResponseResolution = "auto",
   responseQuality: ImageResponseQuality = "auto",
+  responseOutputFormat: ImageResponseOutputFormat = "png",
+  responseOutputCompression: string = "auto",
+  responseModeration: ImageResponseModeration = "auto",
 ) {
+  const normalizedOutputCompression = String(responseOutputCompression || "auto").trim().toLowerCase();
   return httpRequest<{ created: number; data: Array<{ b64_json?: string; url?: string; object_key?: string; url_expires_at?: string; revised_prompt?: string; storage?: string }> }>(
     "/v1/images/generations",
     {
@@ -355,6 +364,9 @@ export async function generateImage(
         response_canvas: responseCanvas,
         response_resolution: responseResolution,
         response_quality: responseQuality,
+        response_output_format: responseOutputFormat,
+        response_output_compression: normalizedOutputCompression === "auto" ? null : Number(normalizedOutputCompression),
+        response_moderation: responseModeration,
       },
     },
   );
@@ -370,9 +382,13 @@ export async function editImage(
   responseCanvas: ImageResponseCanvas = "auto",
   responseResolution: ImageResponseResolution = "auto",
   responseQuality: ImageResponseQuality = "auto",
+  responseOutputFormat: ImageResponseOutputFormat = "png",
+  responseOutputCompression: string = "auto",
+  responseModeration: ImageResponseModeration = "auto",
 ) {
   const formData = new FormData();
   const uploadFiles = Array.isArray(files) ? files : [files];
+  const normalizedOutputCompression = String(responseOutputCompression || "auto").trim().toLowerCase();
 
   uploadFiles.forEach((file) => {
     formData.append("image", file);
@@ -388,6 +404,11 @@ export async function editImage(
   formData.append("response_canvas", responseCanvas);
   formData.append("response_resolution", responseResolution);
   formData.append("response_quality", responseQuality);
+  formData.append("response_output_format", responseOutputFormat);
+  if (normalizedOutputCompression !== "auto") {
+    formData.append("response_output_compression", normalizedOutputCompression);
+  }
+  formData.append("response_moderation", responseModeration);
 
   return httpRequest<{ created: number; data: Array<{ b64_json?: string; url?: string; object_key?: string; url_expires_at?: string; revised_prompt?: string; storage?: string }> }>(
     "/v1/images/edits",
@@ -477,6 +498,9 @@ export async function createImageJob(payload: {
   responseCanvas?: ImageResponseCanvas;
   responseResolution?: ImageResponseResolution;
   responseQuality?: ImageResponseQuality;
+  responseOutputFormat?: ImageResponseOutputFormat;
+  responseOutputCompression?: string;
+  responseModeration?: ImageResponseModeration;
   model?: ImageModel;
   files?: File[];
 }) {
@@ -492,6 +516,11 @@ export async function createImageJob(payload: {
   formData.append("response_canvas", payload.responseCanvas || "auto");
   formData.append("response_resolution", payload.responseResolution || "auto");
   formData.append("response_quality", payload.responseQuality || "auto");
+  formData.append("response_output_format", payload.responseOutputFormat || "png");
+  if (payload.responseOutputCompression && payload.responseOutputCompression !== "auto") {
+    formData.append("response_output_compression", payload.responseOutputCompression);
+  }
+  formData.append("response_moderation", payload.responseModeration || "auto");
   formData.append("delivery_mode", "image_bed");
   for (const file of payload.files || []) {
     formData.append("image", file);

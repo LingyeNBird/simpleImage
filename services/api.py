@@ -34,7 +34,10 @@ from services.image_options import (
     DEFAULT_IMAGE_SIZE,
     DEFAULT_IMAGE_UPSTREAM_ENDPOINT,
     DEFAULT_RESPONSE_CANVAS,
+    DEFAULT_RESPONSE_MODERATION,
+    DEFAULT_RESPONSE_OUTPUT_FORMAT,
     DEFAULT_RESPONSE_QUALITY,
+    DEFAULT_RESPONSE_OUTPUT_COMPRESSION,
     DEFAULT_RESPONSE_RESOLUTION,
     normalize_image_response_options,
     normalize_image_size,
@@ -59,6 +62,9 @@ class ImageGenerationRequest(BaseModel):
     response_canvas: str = DEFAULT_RESPONSE_CANVAS
     response_resolution: str = DEFAULT_RESPONSE_RESOLUTION
     response_quality: str = DEFAULT_RESPONSE_QUALITY
+    response_output_format: str = DEFAULT_RESPONSE_OUTPUT_FORMAT
+    response_output_compression: int | None = DEFAULT_RESPONSE_OUTPUT_COMPRESSION
+    response_moderation: str = DEFAULT_RESPONSE_MODERATION
 
 
 class AccountCreateRequest(BaseModel):
@@ -120,6 +126,9 @@ class ImageJobCreateRequest(BaseModel):
     response_canvas: str = DEFAULT_RESPONSE_CANVAS
     response_resolution: str = DEFAULT_RESPONSE_RESOLUTION
     response_quality: str = DEFAULT_RESPONSE_QUALITY
+    response_output_format: str = DEFAULT_RESPONSE_OUTPUT_FORMAT
+    response_output_compression: int | None = DEFAULT_RESPONSE_OUTPUT_COMPRESSION
+    response_moderation: str = DEFAULT_RESPONSE_MODERATION
 
 
 class RedeemKeyGenerateRequest(BaseModel):
@@ -425,6 +434,9 @@ def _sanitize_image_job(job: Mapping[str, object]) -> dict[str, object]:
         job.get("response_canvas"),
         job.get("response_resolution"),
         job.get("response_quality"),
+        job.get("response_output_format"),
+        job.get("response_output_compression"),
+        job.get("response_moderation"),
     )
     sanitized_result_images = []
     if isinstance(result_images, list):
@@ -468,6 +480,9 @@ def _sanitize_image_job(job: Mapping[str, object]) -> dict[str, object]:
         "response_canvas": response_options.canvas,
         "response_resolution": response_options.resolution,
         "response_quality": response_options.quality,
+        "response_output_format": response_options.output_format,
+        "response_output_compression": response_options.output_compression,
+        "response_moderation": response_options.moderation,
         "status": str(job.get("status") or "queued").strip() or "queued",
         "delivery_mode": "image_bed",
         "created_at": str(job.get("created_at") or "").strip(),
@@ -549,6 +564,9 @@ def create_app() -> FastAPI:
                 job.get("response_canvas"),
                 job.get("response_resolution"),
                 job.get("response_quality"),
+                job.get("response_output_format"),
+                job.get("response_output_compression"),
+                job.get("response_moderation"),
             )
             mode = str(job.get("mode") or "generate").strip()
             if mode == "edit":
@@ -821,6 +839,9 @@ def create_app() -> FastAPI:
             body.response_canvas,
             body.response_resolution,
             body.response_quality,
+            body.response_output_format,
+            body.response_output_compression,
+            body.response_moderation,
         )
         try:
             result = await run_in_threadpool(
@@ -858,6 +879,9 @@ def create_app() -> FastAPI:
             response_canvas: str = Form(default=DEFAULT_RESPONSE_CANVAS),
             response_resolution: str = Form(default=DEFAULT_RESPONSE_RESOLUTION),
             response_quality: str = Form(default=DEFAULT_RESPONSE_QUALITY),
+            response_output_format: str = Form(default=DEFAULT_RESPONSE_OUTPUT_FORMAT),
+            response_output_compression: int | None = Form(default=DEFAULT_RESPONSE_OUTPUT_COMPRESSION),
+            response_moderation: str = Form(default=DEFAULT_RESPONSE_MODERATION),
     ):
         context = auth_service.require_authenticated(authorization)
         if n < 1 or n > 4:
@@ -869,6 +893,9 @@ def create_app() -> FastAPI:
             response_canvas,
             response_resolution,
             response_quality,
+            response_output_format,
+            response_output_compression,
+            response_moderation,
         )
 
         uploads = [*(image or []), *(image_list or [])]
@@ -932,6 +959,9 @@ def create_app() -> FastAPI:
             response_canvas: str = Form(default=DEFAULT_RESPONSE_CANVAS),
             response_resolution: str = Form(default=DEFAULT_RESPONSE_RESOLUTION),
             response_quality: str = Form(default=DEFAULT_RESPONSE_QUALITY),
+            response_output_format: str = Form(default=DEFAULT_RESPONSE_OUTPUT_FORMAT),
+            response_output_compression: int | None = Form(default=DEFAULT_RESPONSE_OUTPUT_COMPRESSION),
+            response_moderation: str = Form(default=DEFAULT_RESPONSE_MODERATION),
     ):
         context = auth_service.require_authenticated(authorization)
         normalized_delivery_mode = _resolve_delivery_mode(context, delivery_mode)
@@ -945,6 +975,9 @@ def create_app() -> FastAPI:
             response_canvas,
             response_resolution,
             response_quality,
+            response_output_format,
+            response_output_compression,
+            response_moderation,
         )
         _ensure_user_quota_or_raise(context, n)
         owner_role, user_id = _resolve_image_job_owner(context)
@@ -974,6 +1007,9 @@ def create_app() -> FastAPI:
             response_canvas=response_options.canvas,
             response_resolution=response_options.resolution,
             response_quality=response_options.quality,
+            response_output_format=response_options.output_format,
+            response_output_compression=response_options.output_compression,
+            response_moderation=response_options.moderation,
             reference_images=[],
         )
 

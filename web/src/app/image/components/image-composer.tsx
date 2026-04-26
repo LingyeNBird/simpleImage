@@ -11,12 +11,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import {
   IMAGE_RESPONSE_CANVAS_OPTIONS,
+  IMAGE_RESPONSE_MODERATION_OPTIONS,
+  IMAGE_RESPONSE_OUTPUT_FORMAT_OPTIONS,
   IMAGE_RESPONSE_QUALITY_OPTIONS,
   IMAGE_RESPONSE_RESOLUTION_OPTIONS,
   IMAGE_SIZE_LABELS,
   IMAGE_SIZE_OPTIONS,
   IMAGE_UPSTREAM_ENDPOINT_OPTIONS,
   type ImageResponseCanvas,
+  type ImageResponseModeration,
+  type ImageResponseOutputFormat,
   type ImageResponseQuality,
   type ImageResponseResolution,
   type ImageUpstreamEndpoint,
@@ -34,6 +38,9 @@ type ImageComposerProps = {
   responseCanvas: ImageResponseCanvas;
   responseResolution: ImageResponseResolution;
   responseQuality: ImageResponseQuality;
+  responseOutputFormat: ImageResponseOutputFormat;
+  responseOutputCompression: string;
+  responseModeration: ImageResponseModeration;
   deliveryMode: ImageDeliveryMode;
   availableDeliveryModes: ImageDeliveryMode[];
   showAllDeliveryModes?: boolean;
@@ -49,6 +56,9 @@ type ImageComposerProps = {
   onResponseCanvasChange: (value: ImageResponseCanvas) => void;
   onResponseResolutionChange: (value: ImageResponseResolution) => void;
   onResponseQualityChange: (value: ImageResponseQuality) => void;
+  onResponseOutputFormatChange: (value: ImageResponseOutputFormat) => void;
+  onResponseOutputCompressionChange: (value: string) => void;
+  onResponseModerationChange: (value: ImageResponseModeration) => void;
   onDeliveryModeChange: (value: ImageDeliveryMode) => void;
   onSubmit: () => void | Promise<void>;
   onPickReferenceImage: () => void;
@@ -65,6 +75,9 @@ export function ImageComposer({
   responseCanvas,
   responseResolution,
   responseQuality,
+  responseOutputFormat,
+  responseOutputCompression,
+  responseModeration,
   deliveryMode,
   availableDeliveryModes,
   showAllDeliveryModes = false,
@@ -80,6 +93,9 @@ export function ImageComposer({
   onResponseCanvasChange,
   onResponseResolutionChange,
   onResponseQualityChange,
+  onResponseOutputFormatChange,
+  onResponseOutputCompressionChange,
+  onResponseModerationChange,
   onDeliveryModeChange,
   onSubmit,
   onPickReferenceImage,
@@ -313,6 +329,50 @@ export function ImageComposer({
                                 </SelectTrigger>
                                 <SelectContent>
                                   {IMAGE_RESPONSE_QUALITY_OPTIONS.map((option) => (
+                                    <SelectItem key={option.value} value={option.value}>
+                                      {option.label}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="flex items-center justify-between gap-3 rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3">
+                              <span className="text-sm font-medium text-stone-700">输出格式</span>
+                              <Select value={responseOutputFormat} onValueChange={(value) => onResponseOutputFormatChange(value as ImageResponseOutputFormat)}>
+                                <SelectTrigger className="h-9 min-w-[132px] rounded-full border-stone-200 bg-white px-3 text-sm font-medium text-stone-700 shadow-none focus-visible:ring-0">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {IMAGE_RESPONSE_OUTPUT_FORMAT_OPTIONS.map((option) => (
+                                    <SelectItem key={option.value} value={option.value}>
+                                      {option.label}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="flex items-center justify-between gap-3 rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3">
+                              <span className="text-sm font-medium text-stone-700">压缩率</span>
+                              <Input
+                                type="number"
+                                min="0"
+                                max="100"
+                                step="1"
+                                value={responseOutputCompression === "auto" ? "" : responseOutputCompression}
+                                onChange={(event) => onResponseOutputCompressionChange(event.target.value || "auto")}
+                                disabled={responseOutputFormat === "png"}
+                                placeholder={responseOutputFormat === "png" ? "PNG 无压缩" : "自动"}
+                                className="h-9 w-28 rounded-full border-stone-200 bg-white px-3 text-center text-sm font-medium text-stone-700 disabled:bg-stone-100 disabled:text-stone-400"
+                              />
+                            </div>
+                            <div className="flex items-center justify-between gap-3 rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3">
+                              <span className="text-sm font-medium text-stone-700">审核强度</span>
+                              <Select value={responseModeration} onValueChange={(value) => onResponseModerationChange(value as ImageResponseModeration)}>
+                                <SelectTrigger className="h-9 min-w-[132px] rounded-full border-stone-200 bg-white px-3 text-sm font-medium text-stone-700 shadow-none focus-visible:ring-0">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {IMAGE_RESPONSE_MODERATION_OPTIONS.map((option) => (
                                     <SelectItem key={option.value} value={option.value}>
                                       {option.label}
                                     </SelectItem>

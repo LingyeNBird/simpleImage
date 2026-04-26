@@ -11,6 +11,8 @@ export type ImageResponseResolution =
   | "3840x2160"
   | "2160x3840";
 export type ImageResponseQuality = "auto" | "low" | "medium" | "high";
+export type ImageResponseOutputFormat = "png" | "jpeg" | "webp";
+export type ImageResponseModeration = "auto" | "low";
 
 export const ACTIVE_CONVERSATION_STORAGE_KEY = "chatgpt2api:image_active_conversation_id";
 export const IMAGE_SIZE_STORAGE_KEY = "chatgpt2api:image_last_size";
@@ -18,12 +20,18 @@ export const IMAGE_UPSTREAM_ENDPOINT_STORAGE_KEY = "chatgpt2api:image_upstream_e
 export const IMAGE_RESPONSE_CANVAS_STORAGE_KEY = "chatgpt2api:image_response_canvas";
 export const IMAGE_RESPONSE_RESOLUTION_STORAGE_KEY = "chatgpt2api:image_response_resolution";
 export const IMAGE_RESPONSE_QUALITY_STORAGE_KEY = "chatgpt2api:image_response_quality";
+export const IMAGE_RESPONSE_OUTPUT_FORMAT_STORAGE_KEY = "chatgpt2api:image_response_output_format";
+export const IMAGE_RESPONSE_OUTPUT_COMPRESSION_STORAGE_KEY = "chatgpt2api:image_response_output_compression";
+export const IMAGE_RESPONSE_MODERATION_STORAGE_KEY = "chatgpt2api:image_response_moderation";
 
 export const DEFAULT_IMAGE_UPSTREAM_ENDPOINT: ImageUpstreamEndpoint = "conversation";
 export const DEFAULT_IMAGE_SIZE = "1:1";
 export const DEFAULT_IMAGE_RESPONSE_CANVAS: ImageResponseCanvas = "auto";
 export const DEFAULT_IMAGE_RESPONSE_RESOLUTION: ImageResponseResolution = "auto";
 export const DEFAULT_IMAGE_RESPONSE_QUALITY: ImageResponseQuality = "auto";
+export const DEFAULT_IMAGE_RESPONSE_OUTPUT_FORMAT: ImageResponseOutputFormat = "png";
+export const DEFAULT_IMAGE_RESPONSE_OUTPUT_COMPRESSION = "auto";
+export const DEFAULT_IMAGE_RESPONSE_MODERATION: ImageResponseModeration = "auto";
 
 export const IMAGE_SIZE_OPTIONS = ["1:1", "16:9", "4:3", "3:4", "9:16"] as const;
 export const IMAGE_SIZE_LABELS: Record<string, string> = {
@@ -79,3 +87,37 @@ export const IMAGE_RESPONSE_QUALITY_OPTIONS: Array<{ value: ImageResponseQuality
   { value: "medium", label: "中" },
   { value: "high", label: "高" },
 ];
+
+export const IMAGE_RESPONSE_OUTPUT_FORMAT_OPTIONS: Array<{ value: ImageResponseOutputFormat; label: string }> = [
+  { value: "png", label: "PNG" },
+  { value: "jpeg", label: "JPEG" },
+  { value: "webp", label: "WEBP" },
+];
+
+export const IMAGE_RESPONSE_MODERATION_OPTIONS: Array<{ value: ImageResponseModeration; label: string }> = [
+  { value: "auto", label: "自动" },
+  { value: "low", label: "低限制" },
+];
+
+export function isImageResponseOutputFormat(value: string): value is ImageResponseOutputFormat {
+  return value === "png" || value === "jpeg" || value === "webp";
+}
+
+export function isImageResponseModeration(value: string): value is ImageResponseModeration {
+  return value === "auto" || value === "low";
+}
+
+export function normalizeImageResponseOutputCompression(value: string): string {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (!normalized || normalized === "auto") {
+    return DEFAULT_IMAGE_RESPONSE_OUTPUT_COMPRESSION;
+  }
+
+  const parsed = Number(normalized);
+  if (!Number.isFinite(parsed)) {
+    return DEFAULT_IMAGE_RESPONSE_OUTPUT_COMPRESSION;
+  }
+
+  const clamped = Math.min(100, Math.max(0, Math.round(parsed)));
+  return String(clamped);
+}

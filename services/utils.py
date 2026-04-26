@@ -90,6 +90,9 @@ def extract_response_image_options(body: dict[str, object]) -> ImageResponseOpti
         tool_payload.get("background") if tool_payload else None,
         tool_payload.get("size") if tool_payload else None,
         tool_payload.get("quality") if tool_payload else None,
+        tool_payload.get("output_format") if tool_payload else None,
+        tool_payload.get("output_compression") if tool_payload else None,
+        tool_payload.get("moderation") if tool_payload else None,
     )
 
 

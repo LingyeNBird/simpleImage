@@ -16,17 +16,28 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   ACTIVE_CONVERSATION_STORAGE_KEY,
   DEFAULT_IMAGE_RESPONSE_CANVAS,
+  DEFAULT_IMAGE_RESPONSE_MODERATION,
+  DEFAULT_IMAGE_RESPONSE_OUTPUT_COMPRESSION,
+  DEFAULT_IMAGE_RESPONSE_OUTPUT_FORMAT,
   DEFAULT_IMAGE_RESPONSE_QUALITY,
   DEFAULT_IMAGE_RESPONSE_RESOLUTION,
   DEFAULT_IMAGE_SIZE,
   DEFAULT_IMAGE_UPSTREAM_ENDPOINT,
   IMAGE_RESPONSE_CANVAS_STORAGE_KEY,
+  IMAGE_RESPONSE_MODERATION_STORAGE_KEY,
+  IMAGE_RESPONSE_OUTPUT_COMPRESSION_STORAGE_KEY,
+  IMAGE_RESPONSE_OUTPUT_FORMAT_STORAGE_KEY,
   IMAGE_RESPONSE_QUALITY_STORAGE_KEY,
   IMAGE_RESPONSE_RESOLUTION_STORAGE_KEY,
   IMAGE_SIZE_STORAGE_KEY,
   IMAGE_UPSTREAM_ENDPOINT_STORAGE_KEY,
+  isImageResponseModeration,
+  isImageResponseOutputFormat,
   isImageResponseResolution,
+  normalizeImageResponseOutputCompression,
   type ImageResponseCanvas,
+  type ImageResponseModeration,
+  type ImageResponseOutputFormat,
   type ImageResponseQuality,
   type ImageResponseResolution,
   type ImageUpstreamEndpoint,
@@ -194,6 +205,17 @@ function buildConversationFromImageJob(job: ImageJob): ImageConversation {
           job.response_quality === "low" || job.response_quality === "medium" || job.response_quality === "high"
             ? job.response_quality
             : "auto",
+        responseOutputFormat:
+          typeof job.response_output_format === "string" && isImageResponseOutputFormat(job.response_output_format)
+            ? job.response_output_format
+            : DEFAULT_IMAGE_RESPONSE_OUTPUT_FORMAT,
+        responseOutputCompression: normalizeImageResponseOutputCompression(
+          String(job.response_output_compression ?? DEFAULT_IMAGE_RESPONSE_OUTPUT_COMPRESSION),
+        ),
+        responseModeration:
+          typeof job.response_moderation === "string" && isImageResponseModeration(job.response_moderation)
+            ? job.response_moderation
+            : DEFAULT_IMAGE_RESPONSE_MODERATION,
         referenceImages: [],
         count: job.count,
         size: job.size || DEFAULT_IMAGE_SIZE,
@@ -335,6 +357,9 @@ export default function ImagePage() {
   const [responseCanvas, setResponseCanvas] = useState<ImageResponseCanvas>(DEFAULT_IMAGE_RESPONSE_CANVAS);
   const [responseResolution, setResponseResolution] = useState<ImageResponseResolution>(DEFAULT_IMAGE_RESPONSE_RESOLUTION);
   const [responseQuality, setResponseQuality] = useState<ImageResponseQuality>(DEFAULT_IMAGE_RESPONSE_QUALITY);
+  const [responseOutputFormat, setResponseOutputFormat] = useState<ImageResponseOutputFormat>(DEFAULT_IMAGE_RESPONSE_OUTPUT_FORMAT);
+  const [responseOutputCompression, setResponseOutputCompression] = useState(DEFAULT_IMAGE_RESPONSE_OUTPUT_COMPRESSION);
+  const [responseModeration, setResponseModeration] = useState<ImageResponseModeration>(DEFAULT_IMAGE_RESPONSE_MODERATION);
   const [imageMode, setImageMode] = useState<ImageConversationMode>("generate");
   const [referenceImageFiles, setReferenceImageFiles] = useState<File[]>([]);
   const [referenceImages, setReferenceImages] = useState<StoredReferenceImage[]>([]);
@@ -472,6 +497,18 @@ export default function ImagePage() {
               storedResponseQuality === "auto"
             ) {
               setResponseQuality(storedResponseQuality);
+            }
+            const storedResponseOutputFormat = window.localStorage.getItem(IMAGE_RESPONSE_OUTPUT_FORMAT_STORAGE_KEY);
+            if (storedResponseOutputFormat && isImageResponseOutputFormat(storedResponseOutputFormat)) {
+              setResponseOutputFormat(storedResponseOutputFormat);
+            }
+            const storedResponseOutputCompression = window.localStorage.getItem(IMAGE_RESPONSE_OUTPUT_COMPRESSION_STORAGE_KEY);
+            if (storedResponseOutputCompression) {
+              setResponseOutputCompression(normalizeImageResponseOutputCompression(storedResponseOutputCompression));
+            }
+            const storedResponseModeration = window.localStorage.getItem(IMAGE_RESPONSE_MODERATION_STORAGE_KEY);
+            if (storedResponseModeration && isImageResponseModeration(storedResponseModeration)) {
+              setResponseModeration(storedResponseModeration);
             }
           }
           const items = await listImageConversations();
@@ -612,6 +649,30 @@ export default function ImagePage() {
 
     window.localStorage.setItem(IMAGE_RESPONSE_QUALITY_STORAGE_KEY, responseQuality);
   }, [responseQuality]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    window.localStorage.setItem(IMAGE_RESPONSE_OUTPUT_FORMAT_STORAGE_KEY, responseOutputFormat);
+  }, [responseOutputFormat]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    window.localStorage.setItem(IMAGE_RESPONSE_OUTPUT_COMPRESSION_STORAGE_KEY, responseOutputCompression);
+  }, [responseOutputCompression]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    window.localStorage.setItem(IMAGE_RESPONSE_MODERATION_STORAGE_KEY, responseModeration);
+  }, [responseModeration]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -908,6 +969,9 @@ export default function ImagePage() {
                     queuedTurn.responseCanvas,
                     queuedTurn.responseResolution,
                     queuedTurn.responseQuality,
+                    queuedTurn.responseOutputFormat,
+                    queuedTurn.responseOutputCompression,
+                    queuedTurn.responseModeration,
                   )
                 : await generateImage(
                     queuedTurn.prompt,
@@ -918,6 +982,9 @@ export default function ImagePage() {
                     queuedTurn.responseCanvas,
                     queuedTurn.responseResolution,
                     queuedTurn.responseQuality,
+                    queuedTurn.responseOutputFormat,
+                    queuedTurn.responseOutputCompression,
+                    queuedTurn.responseModeration,
                   );
             const first = data.data?.[0];
             if (!first?.b64_json && !first?.url) {
@@ -1091,6 +1158,9 @@ export default function ImagePage() {
       responseCanvas,
       responseResolution,
       responseQuality,
+      responseOutputFormat,
+      responseOutputCompression,
+      responseModeration,
       referenceImages: imageMode === "edit" ? referenceImages : [],
       count: parsedCount,
       size: imageSize,
@@ -1134,6 +1204,9 @@ export default function ImagePage() {
           responseCanvas,
           responseResolution,
           responseQuality,
+          responseOutputFormat,
+          responseOutputCompression,
+          responseModeration,
           model: "auto",
           files: imageMode === "edit" ? referenceImageFiles : [],
         });
@@ -1368,6 +1441,9 @@ export default function ImagePage() {
             responseCanvas={responseCanvas}
             responseResolution={responseResolution}
             responseQuality={responseQuality}
+            responseOutputFormat={responseOutputFormat}
+            responseOutputCompression={responseOutputCompression}
+            responseModeration={responseModeration}
             deliveryMode={deliveryMode}
             availableDeliveryModes={availableDeliveryModes}
             showAllDeliveryModes={currentIdentity?.role === "admin"}
@@ -1383,6 +1459,9 @@ export default function ImagePage() {
             onResponseCanvasChange={setResponseCanvas}
             onResponseResolutionChange={setResponseResolution}
             onResponseQualityChange={setResponseQuality}
+            onResponseOutputFormatChange={setResponseOutputFormat}
+            onResponseOutputCompressionChange={(value) => setResponseOutputCompression(normalizeImageResponseOutputCompression(value))}
+            onResponseModerationChange={setResponseModeration}
             onDeliveryModeChange={setDeliveryMode}
             onSubmit={handleSubmit}
             onPickReferenceImage={() => fileInputRef.current?.click()}

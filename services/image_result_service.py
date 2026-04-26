@@ -17,10 +17,20 @@ class SavedImageFile:
     mime_type: str
 
 
+def _extension_from_mime_type(mime_type: str) -> str:
+    normalized = str(mime_type or "image/png").strip().lower()
+    if normalized == "image/jpeg":
+        return ".jpg"
+    if normalized == "image/webp":
+        return ".webp"
+    return ".png"
+
+
 def save_image_bytes(image_bytes: bytes, mime_type: str = "image/png", extension: str = ".png") -> SavedImageFile:
     file_hash = hashlib.md5(image_bytes).hexdigest()
     timestamp = int(time.time())
-    filename = f"{timestamp}_{file_hash}{extension or '.png'}"
+    normalized_extension = extension or _extension_from_mime_type(mime_type)
+    filename = f"{timestamp}_{file_hash}{normalized_extension}"
     relative_dir = Path(time.strftime("%Y"), time.strftime("%m"), time.strftime("%d"))
     file_path = config.images_dir / relative_dir / filename
     _ = file_path.parent.mkdir(parents=True, exist_ok=True)

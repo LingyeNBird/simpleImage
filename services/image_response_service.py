@@ -18,6 +18,14 @@ DEFAULT_RESPONSES_MAIN_MODEL = "gpt-5.4-mini"
 DEFAULT_RESPONSES_TOOL_MODEL = "gpt-image-2"
 
 
+def _resolve_output_mime_type(output_format: str) -> str:
+    if output_format == "jpeg":
+        return "image/jpeg"
+    if output_format == "webp":
+        return "image/webp"
+    return "image/png"
+
+
 def _build_responses_headers(access_token: str) -> dict[str, str]:
     return {
         "Authorization": f"Bearer {access_token}",
@@ -48,16 +56,19 @@ def _build_responses_tool(action: str, requested_model: str, options: ImageRespo
         "type": "image_generation",
         "action": action,
         "model": _resolve_responses_tool_model(requested_model),
-        "output_format": "png",
-        "output_compression": 0,
+        "output_format": options.output_format,
         "partial_images": 0,
     }
+    if options.output_compression is not None and options.output_format != "png":
+        tool["output_compression"] = options.output_compression
     if options.resolution != "auto":
         tool["size"] = options.resolution
     if options.quality != "auto":
         tool["quality"] = options.quality
     if options.canvas != "auto":
         tool["background"] = options.canvas
+    if options.moderation != "auto":
+        tool["moderation"] = options.moderation
     return tool
 
 
@@ -198,6 +209,7 @@ def generate_image_result_via_responses(
     options: ImageResponseOptions,
 ) -> dict[str, object]:
     session = _new_responses_session()
+    output_mime_type = _resolve_output_mime_type(options.output_format)
     try:
         response = session.post(
             f"{CODEX_BASE_URL}/responses",
@@ -221,7 +233,7 @@ def generate_image_result_via_responses(
                     response_format=response_format,
                     base_url=base_url,
                     delivery_mode=delivery_mode,
-                    mime_type="image/png",
+                    mime_type=output_mime_type,
                     revised_prompt=str(item.get("revised_prompt") or prompt).strip() or prompt,
                 )
             )
@@ -245,6 +257,7 @@ def edit_image_result_via_responses(
         raise ImageGenerationError("image is required")
 
     session = _new_responses_session()
+    output_mime_type = _resolve_output_mime_type(options.output_format)
     try:
         response = session.post(
             f"{CODEX_BASE_URL}/responses",
@@ -274,7 +287,7 @@ def edit_image_result_via_responses(
                     response_format=response_format,
                     base_url=base_url,
                     delivery_mode=delivery_mode,
-                    mime_type="image/png",
+                    mime_type=output_mime_type,
                     revised_prompt=str(item.get("revised_prompt") or prompt).strip() or prompt,
                 )
             )

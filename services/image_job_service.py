@@ -12,7 +12,10 @@ from services.config import DATA_DIR
 from services.image_options import (
     DEFAULT_IMAGE_UPSTREAM_ENDPOINT,
     DEFAULT_RESPONSE_CANVAS,
+    DEFAULT_RESPONSE_MODERATION,
+    DEFAULT_RESPONSE_OUTPUT_FORMAT,
     DEFAULT_RESPONSE_QUALITY,
+    DEFAULT_RESPONSE_OUTPUT_COMPRESSION,
     DEFAULT_RESPONSE_RESOLUTION,
     normalize_image_response_options,
     normalize_image_size,
@@ -90,6 +93,9 @@ def _normalize_job(raw: object) -> dict[str, object] | None:
         raw.get("response_canvas"),
         raw.get("response_resolution"),
         raw.get("response_quality"),
+        raw.get("response_output_format"),
+        raw.get("response_output_compression"),
+        raw.get("response_moderation"),
     )
     return {
         "id": job_id,
@@ -107,6 +113,9 @@ def _normalize_job(raw: object) -> dict[str, object] | None:
         "response_canvas": response_options.canvas,
         "response_resolution": response_options.resolution,
         "response_quality": response_options.quality,
+        "response_output_format": response_options.output_format,
+        "response_output_compression": response_options.output_compression,
+        "response_moderation": response_options.moderation,
         "status": status,
         "delivery_mode": "image_bed",
         "created_at": str(raw.get("created_at") or _now_iso()).strip() or _now_iso(),
@@ -194,6 +203,9 @@ class ImageJobService:
         response_canvas: str = DEFAULT_RESPONSE_CANVAS,
         response_resolution: str = DEFAULT_RESPONSE_RESOLUTION,
         response_quality: str = DEFAULT_RESPONSE_QUALITY,
+        response_output_format: str = DEFAULT_RESPONSE_OUTPUT_FORMAT,
+        response_output_compression: int | None = DEFAULT_RESPONSE_OUTPUT_COMPRESSION,
+        response_moderation: str = DEFAULT_RESPONSE_MODERATION,
         reference_images: list[dict[str, object]],
     ) -> dict[str, object]:
         response_options = normalize_image_response_options(
@@ -201,6 +213,9 @@ class ImageJobService:
             response_canvas,
             response_resolution,
             response_quality,
+            response_output_format,
+            response_output_compression,
+            response_moderation,
         )
         now = _now_iso()
         job = {
@@ -219,6 +234,9 @@ class ImageJobService:
             "response_canvas": response_options.canvas,
             "response_resolution": response_options.resolution,
             "response_quality": response_options.quality,
+            "response_output_format": response_options.output_format,
+            "response_output_compression": response_options.output_compression,
+            "response_moderation": response_options.moderation,
             "status": "queued",
             "delivery_mode": "image_bed",
             "created_at": now,
