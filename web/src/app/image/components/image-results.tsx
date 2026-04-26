@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
+import { copyTextToClipboard } from "@/lib/clipboard";
 import type { ImageConversation, ImageTurnStatus, StoredImage, StoredReferenceImage } from "@/store/image-conversations";
 
 export type ImageLightboxItem = {
@@ -35,7 +36,7 @@ export function ImageResults({
 
   const copyImageUrl = async (url: string) => {
     try {
-      await navigator.clipboard.writeText(url);
+      await copyTextToClipboard(url);
       toast.success("已复制临时图床链接");
     } catch {
       toast.error("复制链接失败");
@@ -44,7 +45,7 @@ export function ImageResults({
 
   const copyFailureLog = async (content: string) => {
     try {
-      await navigator.clipboard.writeText(content);
+      await copyTextToClipboard(content);
       toast.success("已复制失败日志");
     } catch {
       toast.error("复制失败日志失败");

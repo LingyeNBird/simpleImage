@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { copyTextToClipboard } from "@/lib/clipboard";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import {
@@ -176,14 +177,19 @@ export default function AdminRedeemKeysPage() {
                 <button
                   type="button"
                   className="inline-flex items-center gap-1 text-stone-500 transition hover:text-stone-900"
-                  onClick={() => {
-                    if (generatedKeys.length === 0) {
-                      return;
-                    }
-                    void navigator.clipboard.writeText(`${generatedKeys.join("\n")}\n`);
-                    toast.success("兑换码已复制");
-                  }}
-                >
+                   onClick={() => {
+                     if (generatedKeys.length === 0) {
+                       return;
+                     }
+                     void copyTextToClipboard(`${generatedKeys.join("\n")}\n`)
+                       .then(() => {
+                         toast.success("兑换码已复制");
+                       })
+                       .catch(() => {
+                         toast.error("复制兑换码失败");
+                       });
+                   }}
+                 >
                   <Copy className="size-3.5" />
                   复制
                 </button>

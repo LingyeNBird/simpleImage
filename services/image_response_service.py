@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import base64
+from collections.abc import Iterable
 import json
-from typing import Any
+from typing import Protocol
 
 from curl_cffi.requests import Session
 
@@ -15,6 +16,16 @@ from services.image_service import ImageGenerationError
 CODEX_BASE_URL = "https://chatgpt.com/backend-api/codex"
 CODEX_USER_AGENT = "codex-tui/0.118.0 (Mac OS 26.3.1; arm64) iTerm.app/3.6.9 (codex-tui; 0.118.0)"
 DEFAULT_RESPONSES_TOOL_MODEL = "gpt-image-2"
+
+
+class _SseResponseLike(Protocol):
+    @property
+    def text(self) -> object: ...
+
+    @property
+    def content(self) -> object: ...
+
+    def iter_lines(self) -> Iterable[bytes | str]: ...
 
 
 def _resolve_output_mime_type(output_format: str) -> str:
@@ -102,7 +113,32 @@ def _build_responses_request(
     return request_payload
 
 
-def _iter_sse_payloads(response: Any) -> list[dict[str, object]]:
+def _summarize_responses_request(request_payload: dict[str, object]) -> str:
+    try:
+        return json.dumps(request_payload, ensure_ascii=False, indent=2)[:4000]
+    except Exception:
+        return str(request_payload)[:4000]
+
+
+def _extract_error_response_text(response: _SseResponseLike) -> str:
+    body = ""
+    try:
+        body = str(response.text or "").strip()
+    except Exception:
+        body = ""
+    if body:
+        return body[:800]
+
+    try:
+        content = response.content
+    except Exception:
+        content = b""
+    if isinstance(content, bytes) and content:
+        return content.decode("utf-8", errors="replace").strip()[:800]
+    return ""
+
+
+def _iter_sse_payloads(response: _SseResponseLike) -> list[dict[str, object]]:
     payloads: list[dict[str, object]] = []
     for raw_line in response.iter_lines():
         if not raw_line:
@@ -214,16 +250,30 @@ def generate_image_result_via_responses(
 ) -> dict[str, object]:
     session = _new_responses_session()
     output_mime_type = _resolve_output_mime_type(options.output_format)
+    request_payload = _build_responses_request(prompt=prompt, requested_model=model, action="generate", options=options)
     try:
         response = session.post(
             f"{CODEX_BASE_URL}/responses",
             headers=_build_responses_headers(access_token),
-            json=_build_responses_request(prompt=prompt, requested_model=model, action="generate", options=options),
+            json=request_payload,
             stream=True,
             timeout=180,
         )
         if not response.ok:
-            raise ImageGenerationError(response.text[:400] or f"responses request failed: {response.status_code}")
+            error_text = _extract_error_response_text(response)
+            raise ImageGenerationError(
+                error_text or f"responses request failed: {response.status_code}",
+                failure_log="\n".join(
+                    [
+                        f"status_code={response.status_code}",
+                        f"reason={getattr(response, 'reason', '')}",
+                        f"request_url={CODEX_BASE_URL}/responses",
+                        "request_payload:",
+                        _summarize_responses_request(request_payload),
+                        *( ["response_body:", error_text] if error_text else [] ),
+                    ]
+                ),
+            )
 
         payloads = _iter_sse_payloads(response)
         completed = _extract_completed_response(payloads)
@@ -262,22 +312,36 @@ def edit_image_result_via_responses(
 
     session = _new_responses_session()
     output_mime_type = _resolve_output_mime_type(options.output_format)
+    request_payload = _build_responses_request(
+        prompt=prompt,
+        requested_model=model,
+        action="edit",
+        options=options,
+        images=encoded_images,
+    )
     try:
         response = session.post(
             f"{CODEX_BASE_URL}/responses",
             headers=_build_responses_headers(access_token),
-            json=_build_responses_request(
-                prompt=prompt,
-                requested_model=model,
-                action="edit",
-                options=options,
-                images=encoded_images,
-            ),
+            json=request_payload,
             stream=True,
             timeout=180,
         )
         if not response.ok:
-            raise ImageGenerationError(response.text[:400] or f"responses request failed: {response.status_code}")
+            error_text = _extract_error_response_text(response)
+            raise ImageGenerationError(
+                error_text or f"responses request failed: {response.status_code}",
+                failure_log="\n".join(
+                    [
+                        f"status_code={response.status_code}",
+                        f"reason={getattr(response, 'reason', '')}",
+                        f"request_url={CODEX_BASE_URL}/responses",
+                        "request_payload:",
+                        _summarize_responses_request(request_payload),
+                        *( ["response_body:", error_text] if error_text else [] ),
+                    ]
+                ),
+            )
 
         payloads = _iter_sse_payloads(response)
         completed = _extract_completed_response(payloads)
