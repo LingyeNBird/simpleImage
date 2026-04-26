@@ -12,6 +12,7 @@ from services.utils import (
     build_chat_image_completion,
     extract_chat_images,
     extract_chat_prompt,
+    extract_response_image_options,
     extract_image_from_message_content,
     extract_response_prompt,
     has_response_image_generation_tool,
@@ -246,12 +247,19 @@ class ChatGPTService:
 
         image_info = _extract_response_image(body.get("input"))
         model = str(body.get("model") or "gpt-5").strip() or "gpt-5"
+        response_options = extract_response_image_options(body)
         try:
             if image_info:
                 image_data, mime_type = image_info
-                image_result = self.edit_with_pool(prompt, [(image_data, "image.png", mime_type)], "gpt-image-1", 1)
+                image_result = self.edit_with_pool(
+                    prompt,
+                    [(image_data, "image.png", mime_type)],
+                    "gpt-image-1",
+                    1,
+                    response_options=response_options,
+                )
             else:
-                image_result = self.generate_with_pool(prompt, "gpt-image-1", 1)
+                image_result = self.generate_with_pool(prompt, "gpt-image-1", 1, response_options=response_options)
         except ImageGenerationError as exc:
             raise HTTPException(status_code=502, detail={"error": str(exc)}) from exc
 

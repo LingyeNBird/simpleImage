@@ -25,6 +25,7 @@ import {
   IMAGE_RESPONSE_RESOLUTION_STORAGE_KEY,
   IMAGE_SIZE_STORAGE_KEY,
   IMAGE_UPSTREAM_ENDPOINT_STORAGE_KEY,
+  isImageResponseResolution,
   type ImageResponseCanvas,
   type ImageResponseQuality,
   type ImageResponseResolution,
@@ -188,9 +189,7 @@ function buildConversationFromImageJob(job: ImageJob): ImageConversation {
         upstreamEndpoint: job.upstream_endpoint === "response" ? "response" : "conversation",
         responseCanvas: job.response_canvas === "opaque" || job.response_canvas === "transparent" ? job.response_canvas : "auto",
         responseResolution:
-          job.response_resolution === "1024x1024" || job.response_resolution === "1536x1024" || job.response_resolution === "1024x1536"
-            ? job.response_resolution
-            : "auto",
+          typeof job.response_resolution === "string" && isImageResponseResolution(job.response_resolution) ? job.response_resolution : "auto",
         responseQuality:
           job.response_quality === "low" || job.response_quality === "medium" || job.response_quality === "high"
             ? job.response_quality
@@ -462,12 +461,7 @@ export default function ImagePage() {
               setResponseCanvas(storedResponseCanvas);
             }
             const storedResponseResolution = window.localStorage.getItem(IMAGE_RESPONSE_RESOLUTION_STORAGE_KEY);
-            if (
-              storedResponseResolution === "1024x1024" ||
-              storedResponseResolution === "1536x1024" ||
-              storedResponseResolution === "1024x1536" ||
-              storedResponseResolution === "auto"
-            ) {
+            if (storedResponseResolution && isImageResponseResolution(storedResponseResolution)) {
               setResponseResolution(storedResponseResolution);
             }
             const storedResponseQuality = window.localStorage.getItem(IMAGE_RESPONSE_QUALITY_STORAGE_KEY);

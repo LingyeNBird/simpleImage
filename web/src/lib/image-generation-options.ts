@@ -1,6 +1,15 @@
 export type ImageUpstreamEndpoint = "conversation" | "response";
 export type ImageResponseCanvas = "auto" | "opaque" | "transparent";
-export type ImageResponseResolution = "auto" | "1024x1024" | "1536x1024" | "1024x1536";
+export type ImageResponseResolution =
+  | "auto"
+  | "1024x1024"
+  | "1536x1024"
+  | "1024x1536"
+  | "2048x2048"
+  | "2560x1440"
+  | "1440x2560"
+  | "3840x2160"
+  | "2160x3840";
 export type ImageResponseQuality = "auto" | "low" | "medium" | "high";
 
 export const ACTIVE_CONVERSATION_STORAGE_KEY = "chatgpt2api:image_active_conversation_id";
@@ -36,12 +45,33 @@ export const IMAGE_RESPONSE_CANVAS_OPTIONS: Array<{ value: ImageResponseCanvas; 
   { value: "transparent", label: "透明画布" },
 ];
 
+export const IMAGE_RESPONSE_RESOLUTION_VALUES: ImageResponseResolution[] = [
+  "auto",
+  "1024x1024",
+  "1536x1024",
+  "1024x1536",
+  "2048x2048",
+  "2560x1440",
+  "1440x2560",
+  "3840x2160",
+  "2160x3840",
+];
+
 export const IMAGE_RESPONSE_RESOLUTION_OPTIONS: Array<{ value: ImageResponseResolution; label: string }> = [
   { value: "auto", label: "自动" },
   { value: "1024x1024", label: "1024 × 1024" },
   { value: "1536x1024", label: "1536 × 1024" },
   { value: "1024x1536", label: "1024 × 1536" },
+  { value: "2048x2048", label: "2048 × 2048" },
+  { value: "2560x1440", label: "2560 × 1440" },
+  { value: "1440x2560", label: "1440 × 2560" },
+  { value: "3840x2160", label: "3840 × 2160" },
+  { value: "2160x3840", label: "2160 × 3840" },
 ];
+
+export function isImageResponseResolution(value: string): value is ImageResponseResolution {
+  return IMAGE_RESPONSE_RESOLUTION_VALUES.includes(value as ImageResponseResolution);
+}
 
 export const IMAGE_RESPONSE_QUALITY_OPTIONS: Array<{ value: ImageResponseQuality; label: string }> = [
   { value: "auto", label: "自动" },

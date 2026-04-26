@@ -19,7 +19,17 @@ DEFAULT_RESPONSE_RESOLUTION = "auto"
 DEFAULT_RESPONSE_QUALITY = "auto"
 
 ALLOWED_RESPONSE_CANVASES = {"auto", "opaque", "transparent"}
-ALLOWED_RESPONSE_RESOLUTIONS = {"auto", "1024x1024", "1536x1024", "1024x1536"}
+ALLOWED_RESPONSE_RESOLUTIONS = {
+    "auto",
+    "1024x1024",
+    "1536x1024",
+    "1024x1536",
+    "2048x2048",
+    "2560x1440",
+    "1440x2560",
+    "3840x2160",
+    "2160x3840",
+}
 ALLOWED_RESPONSE_QUALITIES = {"auto", "low", "medium", "high"}
 
 

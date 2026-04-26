@@ -8,6 +8,7 @@ import type {
   ImageResponseResolution,
   ImageUpstreamEndpoint,
 } from "@/lib/image-generation-options";
+import { isImageResponseResolution } from "@/lib/image-generation-options";
 import type { ImageDeliveryMode, ImageModel } from "@/lib/api";
 
 export type ImageConversationMode = "generate" | "edit";
@@ -141,10 +142,7 @@ function normalizeTurn(turn: ImageTurn & Record<string, unknown>): ImageTurn {
     deliveryMode: turn.deliveryMode === "image_bed" ? "image_bed" : "direct",
     upstreamEndpoint: turn.upstreamEndpoint === "response" ? "response" : "conversation",
     responseCanvas: turn.responseCanvas === "opaque" || turn.responseCanvas === "transparent" ? turn.responseCanvas : "auto",
-    responseResolution:
-      turn.responseResolution === "1024x1024" || turn.responseResolution === "1536x1024" || turn.responseResolution === "1024x1536"
-        ? turn.responseResolution
-        : "auto",
+    responseResolution: typeof turn.responseResolution === "string" && isImageResponseResolution(turn.responseResolution) ? turn.responseResolution : "auto",
     responseQuality:
       turn.responseQuality === "low" || turn.responseQuality === "medium" || turn.responseQuality === "high"
         ? turn.responseQuality
@@ -181,9 +179,7 @@ function normalizeConversation(conversation: ImageConversation & Record<string, 
               ? conversation.responseCanvas
               : "auto",
           responseResolution:
-            conversation.responseResolution === "1024x1024" ||
-            conversation.responseResolution === "1536x1024" ||
-            conversation.responseResolution === "1024x1536"
+            typeof conversation.responseResolution === "string" && isImageResponseResolution(conversation.responseResolution)
               ? conversation.responseResolution
               : "auto",
           responseQuality:

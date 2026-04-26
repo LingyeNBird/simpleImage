@@ -88,7 +88,7 @@ export function ImageComposer({
 }: ImageComposerProps) {
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState(0);
-  const [mobileSettingsOpen, setMobileSettingsOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const visibleDeliveryModes = useMemo<ImageDeliveryMode[]>(
     () => (showAllDeliveryModes ? ["direct", "image_bed"] : availableDeliveryModes),
     [availableDeliveryModes, showAllDeliveryModes],
@@ -226,12 +226,12 @@ export function ImageComposer({
                       {activeTaskCount} 个任务处理中或排队中
                      </div>
                   ) : null}
-                  <Dialog open={mobileSettingsOpen} onOpenChange={setMobileSettingsOpen}>
+                  <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
                     <DialogTrigger asChild>
                       <Button
                         type="button"
                         variant="outline"
-                        className="h-10 rounded-full border-stone-200 bg-white px-4 text-sm font-medium text-stone-700 shadow-none sm:hidden"
+                        className="h-10 rounded-full border-stone-200 bg-white px-4 text-sm font-medium text-stone-700 shadow-none"
                       >
                         <Settings2 className="size-4" />
                         生图设置
@@ -385,135 +385,6 @@ export function ImageComposer({
                     </DialogContent>
                   </Dialog>
 
-                  <div className="hidden items-center gap-2 rounded-full border border-stone-200 bg-white px-3 py-1 sm:flex">
-                    <span className="text-sm font-medium text-stone-700">端点</span>
-                    <Select value={upstreamEndpoint} onValueChange={(value) => onUpstreamEndpointChange(value as ImageUpstreamEndpoint)}>
-                      <SelectTrigger className="h-8 min-w-[132px] gap-1 rounded-full border-0 bg-transparent px-0 text-sm font-medium text-stone-700 shadow-none focus-visible:ring-0">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {IMAGE_UPSTREAM_ENDPOINT_OPTIONS.map((option) => (
-                          <SelectItem key={option.value} value={option.value}>
-                            {option.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="hidden items-center gap-2 rounded-full border border-stone-200 bg-white px-3 py-1 sm:flex">
-                    <span className="text-sm font-medium text-stone-700">张数</span>
-                    <Input
-                      type="number"
-                      min="1"
-                      max="10"
-                      step="1"
-                      value={imageCount}
-                      onChange={(event) => onImageCountChange(event.target.value)}
-                      className="h-8 w-[64px] border-0 bg-transparent px-0 text-center text-sm font-medium text-stone-700 shadow-none focus-visible:ring-0"
-                    />
-                  </div>
-                  {isResponseEndpoint ? (
-                    <>
-                      <div className="hidden items-center gap-2 rounded-full border border-stone-200 bg-white px-3 py-1 sm:flex">
-                        <span className="text-sm font-medium text-stone-700">画布</span>
-                        <Select value={responseCanvas} onValueChange={(value) => onResponseCanvasChange(value as ImageResponseCanvas)}>
-                          <SelectTrigger className="h-8 min-w-[120px] gap-1 rounded-full border-0 bg-transparent px-0 text-sm font-medium text-stone-700 shadow-none focus-visible:ring-0">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {IMAGE_RESPONSE_CANVAS_OPTIONS.map((option) => (
-                              <SelectItem key={option.value} value={option.value}>
-                                {option.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="hidden items-center gap-2 rounded-full border border-stone-200 bg-white px-3 py-1 sm:flex">
-                        <span className="text-sm font-medium text-stone-700">分辨率</span>
-                        <Select value={responseResolution} onValueChange={(value) => onResponseResolutionChange(value as ImageResponseResolution)}>
-                          <SelectTrigger className="h-8 min-w-[130px] gap-1 rounded-full border-0 bg-transparent px-0 text-sm font-medium text-stone-700 shadow-none focus-visible:ring-0">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {IMAGE_RESPONSE_RESOLUTION_OPTIONS.map((option) => (
-                              <SelectItem key={option.value} value={option.value}>
-                                {option.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="hidden items-center gap-2 rounded-full border border-stone-200 bg-white px-3 py-1 sm:flex">
-                        <span className="text-sm font-medium text-stone-700">质量</span>
-                        <Select value={responseQuality} onValueChange={(value) => onResponseQualityChange(value as ImageResponseQuality)}>
-                          <SelectTrigger className="h-8 min-w-[96px] gap-1 rounded-full border-0 bg-transparent px-0 text-sm font-medium text-stone-700 shadow-none focus-visible:ring-0">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {IMAGE_RESPONSE_QUALITY_OPTIONS.map((option) => (
-                              <SelectItem key={option.value} value={option.value}>
-                                {option.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </>
-                  ) : (
-                    <div className="hidden items-center gap-2 rounded-full border border-stone-200 bg-white px-3 py-1 sm:flex">
-                      <span className="text-sm font-medium text-stone-700">比例</span>
-                      <Select value={imageSize} onValueChange={onImageSizeChange}>
-                        <SelectTrigger
-                          className="h-8 min-w-[120px] gap-1 rounded-full border-0 bg-transparent px-0 text-sm font-medium text-stone-700 shadow-none focus-visible:ring-0"
-                          onClick={(event) => event.stopPropagation()}
-                        >
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {IMAGE_SIZE_OPTIONS.map((option) => (
-                            <SelectItem key={option} value={option}>
-                              {IMAGE_SIZE_LABELS[option] || option}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  )}
-                  {visibleDeliveryModes.length > 1 ? (
-                    <div className="hidden flex-col gap-1 sm:flex">
-                      <div className="flex items-center gap-2">
-                        {visibleDeliveryModes.includes("direct") ? (
-                          <ModeButton
-                            active={deliveryMode === "direct"}
-                            onClick={() => onDeliveryModeChange("direct")}
-                            title="直接传输图片，耗时较久"
-                          >
-                            直传
-                          </ModeButton>
-                        ) : null}
-                        {visibleDeliveryModes.includes("image_bed") ? (
-                          <ModeButton
-                            active={deliveryMode === "image_bed"}
-                            disabled={!imageBedAvailable}
-                            onClick={() => onDeliveryModeChange("image_bed")}
-                            title={imageBedAvailable ? "使用图床，避免出现连接问题" : "请先在存储桶管理中配置可用图床"}
-                          >
-                            图床
-                          </ModeButton>
-                        ) : null}
-                      </div>
-                      <div className="px-1 text-xs text-stone-500">{deliveryModeDescription}</div>
-                    </div>
-                  ) : null}
-                  <div className="hidden items-center gap-2 sm:flex">
-                    <ModeButton active={mode === "generate"} onClick={() => onModeChange("generate")}>
-                      文生图
-                    </ModeButton>
-                    <ModeButton active={mode === "edit"} onClick={() => onModeChange("edit")}>
-                      图生图
-                    </ModeButton>
-                  </div>
                 </div>
 
                 <button

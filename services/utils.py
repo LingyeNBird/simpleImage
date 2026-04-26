@@ -7,6 +7,8 @@ from collections.abc import Mapping
 
 from fastapi import HTTPException
 
+from services.image_options import ImageResponseOptions, normalize_image_response_options
+
 
 IMAGE_MODELS = {"gpt-image-1", "gpt-image-2"}
 
@@ -72,6 +74,23 @@ def has_response_image_generation_tool(body: dict[str, object]) -> bool:
     if isinstance(tool_choice, dict) and str(tool_choice.get("type") or "").strip() == "image_generation":
         return True
     return False
+
+
+def extract_response_image_options(body: dict[str, object]) -> ImageResponseOptions:
+    tool_payload: dict[str, object] | None = None
+    tools = body.get("tools")
+    if isinstance(tools, list):
+        for tool in tools:
+            if isinstance(tool, dict) and str(tool.get("type") or "").strip() == "image_generation":
+                tool_payload = tool
+                break
+
+    return normalize_image_response_options(
+        "response",
+        tool_payload.get("background") if tool_payload else None,
+        tool_payload.get("size") if tool_payload else None,
+        tool_payload.get("quality") if tool_payload else None,
+    )
 
 
 def extract_prompt_from_message_content(content: object) -> str:
