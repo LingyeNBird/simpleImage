@@ -51,6 +51,7 @@ export type StoredImage = {
   urlExpiresAt?: string;
   storage?: "direct" | "image_bed";
   error?: string;
+  failureLog?: string;
 };
 
 export type ImageTurnStatus = "queued" | "generating" | "success" | "error";
@@ -86,6 +87,7 @@ export type ImageTurn = {
   createdAt: string;
   status: ImageTurnStatus;
   error?: string;
+  failureLog?: string;
 };
 
 export type ImageConversation = {
@@ -227,6 +229,7 @@ function normalizeTurn(turn: ImageTurn & Record<string, unknown>): ImageTurn {
         ? turn.status
         : derivedStatus,
     error: typeof turn.error === "string" ? turn.error : undefined,
+    failureLog: typeof turn.failureLog === "string" ? turn.failureLog : undefined,
   };
 }
 
@@ -308,8 +311,9 @@ function normalizeConversation(conversation: ImageConversation & Record<string, 
             conversation.status === "generating" || conversation.status === "success" || conversation.status === "error"
               ? conversation.status
               : "success",
-          error: typeof conversation.error === "string" ? conversation.error : undefined,
-        }),
+           error: typeof conversation.error === "string" ? conversation.error : undefined,
+           failureLog: typeof conversation.failureLog === "string" ? conversation.failureLog : undefined,
+         }),
       ];
   const lastTurn = turns.length > 0 ? turns[turns.length - 1] : null;
 

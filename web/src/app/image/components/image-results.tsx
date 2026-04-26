@@ -1,9 +1,12 @@
 "use client";
 
-import { Clock3, LoaderCircle, Sparkles } from "lucide-react";
+import { Clock3, Copy, FileText, LoaderCircle, Sparkles } from "lucide-react";
+import { useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
 import type { ImageConversation, ImageTurnStatus, StoredImage, StoredReferenceImage } from "@/store/image-conversations";
 
 export type ImageLightboxItem = {
@@ -13,6 +16,7 @@ export type ImageLightboxItem = {
 
 type ImageResultsProps = {
   selectedConversation: ImageConversation | null;
+  canViewFailureLog: boolean;
   onOpenLightbox: (images: ImageLightboxItem[], index: number) => void;
   onContinueEdit: (conversationId: string, image: StoredImage | StoredReferenceImage) => void;
   onUploadPrompt: (prompt: string) => void;
@@ -21,17 +25,29 @@ type ImageResultsProps = {
 
 export function ImageResults({
   selectedConversation,
+  canViewFailureLog,
   onOpenLightbox,
   onContinueEdit,
   onUploadPrompt,
   formatConversationTime,
 }: ImageResultsProps) {
+  const [failureLogDialog, setFailureLogDialog] = useState<{ title: string; content: string } | null>(null);
+
   const copyImageUrl = async (url: string) => {
     try {
       await navigator.clipboard.writeText(url);
       toast.success("已复制临时图床链接");
     } catch {
       toast.error("复制链接失败");
+    }
+  };
+
+  const copyFailureLog = async (content: string) => {
+    try {
+      await navigator.clipboard.writeText(content);
+      toast.success("已复制失败日志");
+    } catch {
+      toast.error("复制失败日志失败");
     }
   };
 
@@ -79,6 +95,34 @@ export function ImageResults({
   }
 
   return (
+    <>
+      <Dialog open={Boolean(failureLogDialog)} onOpenChange={(open) => !open && setFailureLogDialog(null)}>
+        <DialogContent className="w-[min(96vw,780px)] rounded-[28px] border-stone-200 p-0 overflow-hidden">
+          <DialogHeader className="border-b border-stone-200 bg-white px-5 pb-4 pt-5 sm:px-6">
+            <DialogTitle>{failureLogDialog?.title || "失败日志"}</DialogTitle>
+            <DialogDescription>可复制完整链路日志，便于排查上游请求、权限或图床流程问题。</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 bg-stone-50 px-5 py-5 sm:px-6">
+            <Textarea
+              value={failureLogDialog?.content || ""}
+              readOnly
+              className="min-h-[360px] rounded-3xl border-stone-200 bg-white px-4 py-3 font-mono text-xs leading-6 text-stone-700 shadow-none focus-visible:ring-0"
+            />
+            <div className="flex justify-end">
+              <Button
+                type="button"
+                variant="outline"
+                className="rounded-full border-stone-200 bg-white text-stone-700 hover:bg-stone-50"
+                onClick={() => void copyFailureLog(failureLogDialog?.content || "")}
+              >
+                <Copy className="size-4" />
+                复制日志
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
     <div className="mx-auto flex w-full max-w-[980px] flex-col gap-8">
       {selectedConversation.turns.map((turn, turnIndex) => {
         const referenceLightboxImages = turn.referenceImages.map((image, index) => ({
@@ -243,8 +287,20 @@ export function ImageResults({
                           key={image.id}
                           className="break-inside-avoid overflow-hidden border border-rose-200 bg-rose-50"
                         >
-                          <div className="flex min-h-[320px] items-center justify-center px-6 py-8 text-center text-sm leading-6 text-rose-600">
-                            {image.error || "生成失败"}
+                          <div className="flex min-h-[320px] flex-col items-center justify-center gap-4 px-6 py-8 text-center text-sm leading-6 text-rose-600">
+                            <div>{image.error || "生成失败"}</div>
+                            {canViewFailureLog && image.failureLog ? (
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="rounded-full border-rose-200 bg-white text-rose-700 hover:bg-rose-50"
+                                onClick={() => setFailureLogDialog({ title: `失败日志 · 结果 ${index + 1}`, content: image.failureLog || "" })}
+                              >
+                                <FileText className="size-4" />
+                                查看日志
+                              </Button>
+                            ) : null}
                           </div>
                         </div>
                       );
@@ -271,8 +327,22 @@ export function ImageResults({
                 </div>
 
                 {turn.status === "error" && turn.error ? (
-                  <div className="mt-4 border-l-2 border-amber-300 bg-amber-50/70 px-4 py-3 text-sm leading-6 text-amber-700">
-                    {turn.error}
+                  <div className="mt-4 space-y-3 border-l-2 border-amber-300 bg-amber-50/70 px-4 py-3 text-sm leading-6 text-amber-700">
+                    <div>{turn.error}</div>
+                    {canViewFailureLog && turn.failureLog ? (
+                      <div>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="rounded-full border-amber-200 bg-white text-amber-700 hover:bg-amber-50"
+                          onClick={() => setFailureLogDialog({ title: `失败日志 · 第 ${turnIndex + 1} 轮`, content: turn.failureLog || "" })}
+                        >
+                          <FileText className="size-4" />
+                          查看日志
+                        </Button>
+                      </div>
+                    ) : null}
                   </div>
                 ) : null}
               </div>
@@ -281,6 +351,7 @@ export function ImageResults({
         );
       })}
     </div>
+    </>
   );
 }
 

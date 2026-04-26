@@ -54,6 +54,7 @@ class LocalUserPublic:
     quota: int
     allow_direct_mode: bool
     allow_image_bed_mode: bool
+    allow_view_image_failure_log: bool
     created_at: str | None
     updated_at: str | None
     last_login_at: str | None
@@ -66,6 +67,7 @@ class LocalUserPublic:
             "quota": self.quota,
             "allow_direct_mode": self.allow_direct_mode,
             "allow_image_bed_mode": self.allow_image_bed_mode,
+            "allow_view_image_failure_log": self.allow_view_image_failure_log,
             "created_at": self.created_at,
             "updated_at": self.updated_at,
             "last_login_at": self.last_login_at,
@@ -128,6 +130,7 @@ class UserService:
             "quota": quota,
             "allow_direct_mode": _as_bool(item.get("allow_direct_mode"), True),
             "allow_image_bed_mode": _as_bool(item.get("allow_image_bed_mode"), True),
+            "allow_view_image_failure_log": _as_bool(item.get("allow_view_image_failure_log"), False),
             "sessions": normalized_sessions,
             "created_at": str(item.get("created_at") or "").strip() or None,
             "updated_at": str(item.get("updated_at") or "").strip() or None,
@@ -206,6 +209,7 @@ class UserService:
             quota=max(0, int(item.get("quota") or 0)),
             allow_direct_mode=_as_bool(item.get("allow_direct_mode"), True),
             allow_image_bed_mode=_as_bool(item.get("allow_image_bed_mode"), True),
+            allow_view_image_failure_log=_as_bool(item.get("allow_view_image_failure_log"), False),
             created_at=item.get("created_at"),
             updated_at=item.get("updated_at"),
             last_login_at=item.get("last_login_at"),
@@ -243,6 +247,7 @@ class UserService:
         *,
         allow_direct_mode: bool = True,
         allow_image_bed_mode: bool = True,
+        allow_view_image_failure_log: bool = False,
     ) -> dict[str, object]:
         normalized_username = self._normalize_username(username)
         plain_password = str(password or "")
@@ -268,6 +273,7 @@ class UserService:
                 "quota": clean_quota,
                 "allow_direct_mode": bool(allow_direct_mode),
                 "allow_image_bed_mode": bool(allow_image_bed_mode),
+                "allow_view_image_failure_log": bool(allow_view_image_failure_log),
                 "sessions": [],
                 "created_at": now,
                 "updated_at": now,
@@ -368,6 +374,7 @@ class UserService:
         *,
         allow_direct_mode: bool,
         allow_image_bed_mode: bool,
+        allow_view_image_failure_log: bool | None = None,
     ) -> dict[str, object] | None:
         normalized_id = str(user_id or "").strip()
         if not normalized_id:
@@ -378,6 +385,8 @@ class UserService:
                     continue
                 user["allow_direct_mode"] = bool(allow_direct_mode)
                 user["allow_image_bed_mode"] = bool(allow_image_bed_mode)
+                if allow_view_image_failure_log is not None:
+                    user["allow_view_image_failure_log"] = bool(allow_view_image_failure_log)
                 user["updated_at"] = _now_text()
                 self._save_users()
                 return self._to_public_user(user).to_dict()

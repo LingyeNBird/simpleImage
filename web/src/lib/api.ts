@@ -24,6 +24,7 @@ export type CurrentIdentity = {
   quota?: number;
   allow_direct_mode?: boolean;
   allow_image_bed_mode?: boolean;
+  allow_view_image_failure_log?: boolean;
   image_delivery_modes?: ImageDeliveryMode[];
 };
 
@@ -33,6 +34,7 @@ export type AdminUser = {
   quota: number;
   allow_direct_mode: boolean;
   allow_image_bed_mode: boolean;
+  allow_view_image_failure_log: boolean;
   created_at?: string;
   updated_at?: string;
 };
@@ -75,6 +77,7 @@ export type ImageJob = {
   created_at: string;
   updated_at: string;
   error?: string | null;
+  failure_log?: string | null;
   result_images: Array<{ id: string; url: string; storage: "image_bed"; object_key?: string; url_expires_at?: string }>;
   reference_images: Array<{ name: string; type: string }>;
 };
@@ -210,13 +213,14 @@ export async function fetchCurrentIdentity() {
     role: AuthRole;
     version?: string;
     image_delivery_modes?: ImageDeliveryMode[];
-    user?: {
-      id?: string;
-      username?: string;
-      quota?: number;
-      allow_direct_mode?: boolean;
-      allow_image_bed_mode?: boolean;
-    };
+      user?: {
+        id?: string;
+        username?: string;
+        quota?: number;
+        allow_direct_mode?: boolean;
+        allow_image_bed_mode?: boolean;
+        allow_view_image_failure_log?: boolean;
+      };
   }>("/auth/me", {
     redirectOnUnauthorized: false,
   });
@@ -232,6 +236,7 @@ export async function fetchCurrentIdentity() {
     quota: data.user?.quota,
     allow_direct_mode: data.user?.allow_direct_mode,
     allow_image_bed_mode: data.user?.allow_image_bed_mode,
+    allow_view_image_failure_log: data.user?.allow_view_image_failure_log,
     image_delivery_modes: data.image_delivery_modes || ["direct"],
   } satisfies CurrentIdentity;
 }
@@ -260,6 +265,7 @@ export async function createAdminUser(payload: {
   quota?: number;
   allow_direct_mode?: boolean;
   allow_image_bed_mode?: boolean;
+  allow_view_image_failure_log?: boolean;
 }) {
   return httpRequest<{ item: AdminUser; items: AdminUser[] }>("/api/users", {
     method: "POST",
@@ -294,7 +300,7 @@ export async function generateAdminRedeemKeys(payload: {
 
 export async function updateAdminUserImageModes(
   userId: string,
-  payload: { allow_direct_mode: boolean; allow_image_bed_mode: boolean },
+  payload: { allow_direct_mode: boolean; allow_image_bed_mode: boolean; allow_view_image_failure_log: boolean },
 ) {
   return httpRequest<{ item: AdminUser; items: AdminUser[] }>(`/api/users/${userId}/image-modes`, {
     method: "POST",

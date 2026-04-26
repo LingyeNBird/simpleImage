@@ -60,9 +60,11 @@ class ChatGPTService:
     ):
         created = None
         image_items: list[dict[str, object]] = []
+        failure_logs: list[str] = []
 
         for index in range(1, n + 1):
             while True:
+                normalized_response_options = response_options or normalize_image_response_options(None, None, None, None)
                 try:
                     request_token = self.account_service.get_available_access_token()
                 except RuntimeError as exc:
@@ -71,7 +73,6 @@ class ChatGPTService:
 
                 print(f"[image-generate] start pooled token={request_token[:12]}... model={model} index={index}/{n}")
                 try:
-                    normalized_response_options = response_options or normalize_image_response_options(None, None, None, None)
                     if normalized_response_options.upstream_endpoint == "response":
                         result = generate_image_result_via_responses(
                             request_token,
@@ -98,6 +99,21 @@ class ChatGPTService:
                 except ImageGenerationError as exc:
                     account = self.account_service.mark_image_result(request_token, success=False)
                     message = str(exc)
+                    failure_logs.append(
+                        "\n".join(
+                            part
+                            for part in [
+                                f"attempt={index}/{n}",
+                                f"token={request_token[:12]}...",
+                                f"model={model}",
+                                f"delivery_mode={delivery_mode}",
+                                f"upstream_endpoint={normalized_response_options.upstream_endpoint}",
+                                f"error={message}",
+                                getattr(exc, "failure_log", None),
+                            ]
+                            if part
+                        )
+                    )
                     print(
                         f"[image-generate] fail pooled token={request_token[:12]}... "
                         f"error={message} quota={account.get('quota') if account else 'unknown'} status={account.get('status') if account else 'unknown'}"
@@ -109,7 +125,7 @@ class ChatGPTService:
                     break
 
         if not image_items:
-            raise ImageGenerationError("image generation failed")
+            raise ImageGenerationError("image generation failed", failure_log="\n\n".join(failure_logs))
 
         return {
             "created": created,
@@ -131,11 +147,13 @@ class ChatGPTService:
         created = None
         image_items: list[dict[str, object]] = []
         normalized_images = list(images)
+        failure_logs: list[str] = []
         if not normalized_images:
             raise ImageGenerationError("image is required")
 
         for index in range(1, n + 1):
             while True:
+                normalized_response_options = response_options or normalize_image_response_options(None, None, None, None)
                 try:
                     request_token = self.account_service.get_available_access_token()
                 except RuntimeError as exc:
@@ -147,7 +165,6 @@ class ChatGPTService:
                     f"model={model} index={index}/{n} images={len(normalized_images)}"
                 )
                 try:
-                    normalized_response_options = response_options or normalize_image_response_options(None, None, None, None)
                     if normalized_response_options.upstream_endpoint == "response":
                         result = edit_image_result_via_responses(
                             request_token,
@@ -184,6 +201,22 @@ class ChatGPTService:
                 except ImageGenerationError as exc:
                     account = self.account_service.mark_image_result(request_token, success=False)
                     message = str(exc)
+                    failure_logs.append(
+                        "\n".join(
+                            part
+                            for part in [
+                                f"attempt={index}/{n}",
+                                f"token={request_token[:12]}...",
+                                f"model={model}",
+                                f"delivery_mode={delivery_mode}",
+                                f"upstream_endpoint={normalized_response_options.upstream_endpoint}",
+                                f"reference_image_count={len(normalized_images)}",
+                                f"error={message}",
+                                getattr(exc, "failure_log", None),
+                            ]
+                            if part
+                        )
+                    )
                     print(
                         f"[image-edit] fail pooled token={request_token[:12]}... "
                         f"error={message} quota={account.get('quota') if account else 'unknown'} status={account.get('status') if account else 'unknown'}"
@@ -195,7 +228,7 @@ class ChatGPTService:
                     break
 
         if not image_items:
-            raise ImageGenerationError("image edit failed")
+            raise ImageGenerationError("image edit failed", failure_log="\n\n".join(failure_logs))
 
         return {
             "created": created,

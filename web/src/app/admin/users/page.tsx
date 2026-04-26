@@ -42,11 +42,12 @@ export default function AdminUsersPage() {
   const [isCreating, setIsCreating] = useState(false);
   const [allowDirectMode, setAllowDirectMode] = useState(true);
   const [allowImageBedMode, setAllowImageBedMode] = useState(true);
+  const [allowViewImageFailureLog, setAllowViewImageFailureLog] = useState(false);
 
   const [editingQuotaUserId, setEditingQuotaUserId] = useState<string | null>(null);
   const [editingModesUserId, setEditingModesUserId] = useState<string | null>(null);
   const [quotaDrafts, setQuotaDrafts] = useState<Record<string, string>>({});
-  const [modeDrafts, setModeDrafts] = useState<Record<string, { allow_direct_mode: boolean; allow_image_bed_mode: boolean }>>({});
+  const [modeDrafts, setModeDrafts] = useState<Record<string, { allow_direct_mode: boolean; allow_image_bed_mode: boolean; allow_view_image_failure_log: boolean }>>({});
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
   const [registerDefaultModes, setRegisterDefaultModes] = useState({
     allow_direct_mode: true,
@@ -72,7 +73,7 @@ export default function AdminUsersPage() {
       );
       setModeDrafts(
         Object.fromEntries(
-          usersData.items.map((item) => [item.id, { allow_direct_mode: item.allow_direct_mode, allow_image_bed_mode: item.allow_image_bed_mode }]),
+          usersData.items.map((item) => [item.id, { allow_direct_mode: item.allow_direct_mode, allow_image_bed_mode: item.allow_image_bed_mode, allow_view_image_failure_log: item.allow_view_image_failure_log }]),
         ),
       );
       setRegisterDefaultModes({
@@ -171,6 +172,7 @@ export default function AdminUsersPage() {
         quota: Math.max(0, Number(quota) || 0),
         allow_direct_mode: allowDirectMode,
         allow_image_bed_mode: allowImageBedMode,
+        allow_view_image_failure_log: allowViewImageFailureLog,
       });
       setUsers(data.items);
       setQuotaDrafts(
@@ -178,7 +180,7 @@ export default function AdminUsersPage() {
       );
       setModeDrafts(
         Object.fromEntries(
-          data.items.map((item) => [item.id, { allow_direct_mode: item.allow_direct_mode, allow_image_bed_mode: item.allow_image_bed_mode }]),
+          data.items.map((item) => [item.id, { allow_direct_mode: item.allow_direct_mode, allow_image_bed_mode: item.allow_image_bed_mode, allow_view_image_failure_log: item.allow_view_image_failure_log }]),
         ),
       );
       setUsername("");
@@ -186,6 +188,7 @@ export default function AdminUsersPage() {
       setQuota("0");
       setAllowDirectMode(true);
       setAllowImageBedMode(true);
+      setAllowViewImageFailureLog(false);
       toast.success("用户已创建");
     } catch (error) {
       const message = error instanceof Error ? error.message : "创建用户失败";
@@ -205,7 +208,7 @@ export default function AdminUsersPage() {
       );
       setModeDrafts(
         Object.fromEntries(
-          data.items.map((item) => [item.id, { allow_direct_mode: item.allow_direct_mode, allow_image_bed_mode: item.allow_image_bed_mode }]),
+          data.items.map((item) => [item.id, { allow_direct_mode: item.allow_direct_mode, allow_image_bed_mode: item.allow_image_bed_mode, allow_view_image_failure_log: item.allow_view_image_failure_log }]),
         ),
       );
       toast.success("用户已删除");
@@ -238,10 +241,11 @@ export default function AdminUsersPage() {
   const handleUpdateModes = async (user: AdminUser) => {
     setEditingModesUserId(user.id);
     try {
-      const draft = modeDrafts[user.id] ?? {
-        allow_direct_mode: user.allow_direct_mode,
-        allow_image_bed_mode: user.allow_image_bed_mode,
-      };
+        const draft = modeDrafts[user.id] ?? {
+          allow_direct_mode: user.allow_direct_mode,
+          allow_image_bed_mode: user.allow_image_bed_mode,
+          allow_view_image_failure_log: user.allow_view_image_failure_log,
+        };
       if (!draft.allow_direct_mode && !draft.allow_image_bed_mode) {
         toast.error("至少启用一种图片模式");
         return;
@@ -250,7 +254,7 @@ export default function AdminUsersPage() {
       setUsers(data.items);
       setModeDrafts(
         Object.fromEntries(
-          data.items.map((item) => [item.id, { allow_direct_mode: item.allow_direct_mode, allow_image_bed_mode: item.allow_image_bed_mode }]),
+          data.items.map((item) => [item.id, { allow_direct_mode: item.allow_direct_mode, allow_image_bed_mode: item.allow_image_bed_mode, allow_view_image_failure_log: item.allow_view_image_failure_log }]),
         ),
       );
       toast.success("图片模式权限已更新");
@@ -397,11 +401,15 @@ export default function AdminUsersPage() {
                  <Checkbox checked={allowDirectMode} onCheckedChange={(checked) => setAllowDirectMode(Boolean(checked))} />
                  <span>允许直传模式</span>
                </label>
-               <label className="flex items-start gap-3 rounded-xl border border-stone-200 bg-white px-4 py-3 text-sm text-stone-700">
-                 <Checkbox checked={allowImageBedMode} onCheckedChange={(checked) => setAllowImageBedMode(Boolean(checked))} />
-                 <span>允许图床模式</span>
-               </label>
-             </div>
+                <label className="flex items-start gap-3 rounded-xl border border-stone-200 bg-white px-4 py-3 text-sm text-stone-700">
+                  <Checkbox checked={allowImageBedMode} onCheckedChange={(checked) => setAllowImageBedMode(Boolean(checked))} />
+                  <span>允许图床模式</span>
+                </label>
+                <label className="flex items-start gap-3 rounded-xl border border-stone-200 bg-white px-4 py-3 text-sm text-stone-700 sm:col-span-2">
+                  <Checkbox checked={allowViewImageFailureLog} onCheckedChange={(checked) => setAllowViewImageFailureLog(Boolean(checked))} />
+                  <span>允许查看生图失败日志</span>
+                </label>
+              </div>
             <Button
               className="h-10 rounded-xl bg-stone-950 px-4 text-white hover:bg-stone-800"
               onClick={() => void handleCreateUser()}
@@ -426,7 +434,7 @@ export default function AdminUsersPage() {
                   <tr>
                     <th className="px-4 py-3">用户名</th>
                     <th className="w-44 px-4 py-3">额度</th>
-                    <th className="w-64 px-4 py-3">图片模式权限</th>
+                    <th className="w-80 px-4 py-3">图片权限</th>
                     <th className="w-40 px-4 py-3">操作</th>
                   </tr>
                 </thead>
@@ -470,6 +478,7 @@ export default function AdminUsersPage() {
                                 [user.id]: {
                                   allow_direct_mode: Boolean(checked),
                                   allow_image_bed_mode: (prev[user.id] ?? user).allow_image_bed_mode,
+                                  allow_view_image_failure_log: (prev[user.id] ?? user).allow_view_image_failure_log,
                                 },
                               }))
                             }
@@ -485,11 +494,28 @@ export default function AdminUsersPage() {
                                 [user.id]: {
                                   allow_direct_mode: (prev[user.id] ?? user).allow_direct_mode,
                                   allow_image_bed_mode: Boolean(checked),
+                                  allow_view_image_failure_log: (prev[user.id] ?? user).allow_view_image_failure_log,
                                 },
                               }))
                             }
                           />
                           图床
+                        </label>
+                        <label className="flex items-center gap-2 text-sm text-stone-700">
+                          <Checkbox
+                            checked={(modeDrafts[user.id] ?? user).allow_view_image_failure_log}
+                            onCheckedChange={(checked) =>
+                              setModeDrafts((prev) => ({
+                                ...prev,
+                                [user.id]: {
+                                  allow_direct_mode: (prev[user.id] ?? user).allow_direct_mode,
+                                  allow_image_bed_mode: (prev[user.id] ?? user).allow_image_bed_mode,
+                                  allow_view_image_failure_log: Boolean(checked),
+                                },
+                              }))
+                            }
+                          />
+                          失败日志
                         </label>
                         <Button
                           variant="outline"

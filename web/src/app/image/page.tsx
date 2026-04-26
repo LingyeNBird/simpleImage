@@ -81,6 +81,7 @@ import {
   type ImageDeliveryMode,
   type ImageJob,
 } from "@/lib/api";
+import { HttpRequestError } from "@/lib/request";
 import {
   clearImageConversations,
   deleteImageConversation,
@@ -293,13 +294,19 @@ function buildConversationFromImageJob(job: ImageJob): ImageConversation {
                 id: `${turnId}-${index}`,
                 status: job.status === "error" ? ("error" as const) : ("loading" as const),
                 error: job.status === "error" ? job.error || "生成失败" : undefined,
+                failureLog: job.status === "error" ? job.failure_log || undefined : undefined,
               })),
         createdAt: job.created_at,
         status: mapJobStatusToTurnStatus(job.status),
         error: job.status === "error" ? job.error || undefined : undefined,
+        failureLog: job.status === "error" ? job.failure_log || undefined : undefined,
       },
     ],
   };
+}
+
+function extractFailureLog(error: unknown) {
+  return error instanceof HttpRequestError ? error.failureLog : undefined;
 }
 
 function mergeImageJobConversations(current: ImageConversation[], jobs: ImageJob[]) {
@@ -1240,10 +1247,12 @@ export default function ImagePage() {
             return nextImage;
           } catch (error) {
             const message = error instanceof Error ? error.message : "生成失败";
+            const failureLog = extractFailureLog(error);
             const failedImage: StoredImage = {
               id: pendingImage.id,
               status: "error",
               error: message,
+              failureLog,
             };
 
             await updateConversation(
@@ -1300,6 +1309,7 @@ export default function ImagePage() {
         await loadQuota();
       } catch (error) {
         const message = error instanceof Error ? error.message : "生成图片失败";
+        const failureLog = extractFailureLog(error);
         await updateConversation(conversationId, (current) => {
           const conversation = current ?? snapshot;
           return {
@@ -1311,8 +1321,9 @@ export default function ImagePage() {
                     ...turn,
                     status: "error",
                     error: message,
+                    failureLog,
                     images: turn.images.map((image) =>
-                      image.status === "loading" ? { ...image, status: "error", error: message } : image,
+                      image.status === "loading" ? { ...image, status: "error", error: message, failureLog } : image,
                     ),
                   }
                 : turn,
@@ -1466,6 +1477,7 @@ export default function ImagePage() {
         await syncImageJobs();
       } catch (error) {
         const message = error instanceof Error ? error.message : "提交图床任务失败";
+        const failureLog = extractFailureLog(error);
         await updateConversation(conversationId, (current) => {
           const conversation = current ?? baseConversation;
           return {
@@ -1477,7 +1489,8 @@ export default function ImagePage() {
                     ...turn,
                     status: "error",
                     error: message,
-                    images: turn.images.map((image) => ({ ...image, status: "error", error: message })),
+                    failureLog,
+                    images: turn.images.map((image) => ({ ...image, status: "error", error: message, failureLog })),
                   }
                 : turn,
             ),
@@ -1650,6 +1663,7 @@ export default function ImagePage() {
           >
             <ImageResults
               selectedConversation={selectedConversation}
+              canViewFailureLog={currentIdentity?.role === "admin" || currentIdentity?.allow_view_image_failure_log === true}
               onOpenLightbox={openLightbox}
               onContinueEdit={handleContinueEdit}
               onUploadPrompt={handleUploadPromptFromConversation}

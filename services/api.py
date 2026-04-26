@@ -3,6 +3,7 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 from pathlib import Path
 from threading import Event, Thread
+import traceback
 from typing import Mapping
 
 from fastapi import APIRouter, FastAPI, File, Form, Header, Request, HTTPException, UploadFile
@@ -127,11 +128,13 @@ class AdminUserCreateRequest(BaseModel):
     quota: int = Field(default=0, ge=0)
     allow_direct_mode: bool = True
     allow_image_bed_mode: bool = True
+    allow_view_image_failure_log: bool = False
 
 
 class UserImageModeUpdateRequest(BaseModel):
     allow_direct_mode: bool = True
     allow_image_bed_mode: bool = True
+    allow_view_image_failure_log: bool = False
 
 
 class ImageJobCreateRequest(BaseModel):
@@ -392,6 +395,50 @@ def _ensure_user_quota_or_raise(context: AuthContext, required: int) -> dict[str
     return user
 
 
+def _can_view_image_failure_log(context: AuthContext) -> bool:
+    if context.is_admin:
+        return True
+    user = context.user or {}
+    return bool(user.get("allow_view_image_failure_log", False))
+
+
+def _build_image_failure_log(
+    exc: Exception,
+    *,
+    stage: str,
+    mode: str,
+    delivery_mode: str,
+    upstream_endpoint: str,
+    model: str,
+    count: int,
+    size: str | None = None,
+    reference_image_count: int | None = None,
+) -> str:
+    sections = [
+        "[image-failure]",
+        f"stage={stage}",
+        f"mode={mode}",
+        f"delivery_mode={delivery_mode}",
+        f"upstream_endpoint={upstream_endpoint}",
+        f"model={model}",
+        f"count={count}",
+    ]
+    if size:
+        sections.append(f"size={size}")
+    if reference_image_count is not None:
+        sections.append(f"reference_image_count={reference_image_count}")
+    sections.extend(
+        part
+        for part in [
+            f"error={str(exc)}",
+            getattr(exc, "failure_log", None),
+            "traceback:\n" + traceback.format_exc(),
+        ]
+        if part
+    )
+    return "\n\n".join(sections)
+
+
 def _consume_user_quota_after_success(context: AuthContext, generated_count: int) -> dict[str, object] | None:
     if context.is_admin:
         return None
@@ -456,7 +503,7 @@ def resolve_web_asset(requested_path: str) -> Path | None:
     return None
 
 
-def _sanitize_image_job(job: Mapping[str, object]) -> dict[str, object]:
+def _sanitize_image_job(job: Mapping[str, object], *, include_failure_log: bool = False) -> dict[str, object]:
     result_images = job.get("result_images")
     reference_images = job.get("reference_images")
     response_options = normalize_image_response_options(
@@ -538,6 +585,7 @@ def _sanitize_image_job(job: Mapping[str, object]) -> dict[str, object]:
         "created_at": str(job.get("created_at") or "").strip(),
         "updated_at": str(job.get("updated_at") or "").strip(),
         "error": str(job.get("error") or "").strip() or None,
+        "failure_log": (str(job.get("failure_log") or "").strip() or None) if include_failure_log else None,
         "result_images": sanitized_result_images,
         "reference_images": [
             {"name": str(item.get("name") or "").strip(), "type": str(item.get("type") or "image/png").strip() or "image/png"}
@@ -604,31 +652,31 @@ def create_app() -> FastAPI:
         if job is None:
             return
         image_job_service.update_job_status(job_id, status="running")
+        model = str(job.get("model") or "auto").strip() or "auto"
+        count = max(1, _safe_int(job.get("count"), 1))
+        size = normalize_image_size(job.get("size"))
+        response_options = normalize_image_response_options(
+            job.get("upstream_endpoint"),
+            job.get("response_canvas"),
+            job.get("response_resolution"),
+            job.get("response_quality"),
+            job.get("response_output_format"),
+            job.get("response_output_compression"),
+            job.get("response_moderation"),
+            job.get("response_main_model"),
+            job.get("response_tool_model"),
+            job.get("response_instructions"),
+            job.get("response_reasoning_effort"),
+            job.get("response_reasoning_summary"),
+            job.get("response_parallel_tool_calls"),
+            job.get("response_include_encrypted_reasoning"),
+            job.get("response_store"),
+            job.get("response_partial_images"),
+            job.get("response_tool_choice"),
+        )
+        mode = str(job.get("mode") or "generate").strip()
         try:
             prompt = str(job.get("prompt") or "").strip()
-            model = str(job.get("model") or "auto").strip() or "auto"
-            count = max(1, _safe_int(job.get("count"), 1))
-            size = normalize_image_size(job.get("size"))
-            response_options = normalize_image_response_options(
-                job.get("upstream_endpoint"),
-                job.get("response_canvas"),
-                job.get("response_resolution"),
-                job.get("response_quality"),
-                job.get("response_output_format"),
-                job.get("response_output_compression"),
-                job.get("response_moderation"),
-                job.get("response_main_model"),
-                job.get("response_tool_model"),
-                job.get("response_instructions"),
-                job.get("response_reasoning_effort"),
-                job.get("response_reasoning_summary"),
-                job.get("response_parallel_tool_calls"),
-                job.get("response_include_encrypted_reasoning"),
-                job.get("response_store"),
-                job.get("response_partial_images"),
-                job.get("response_tool_choice"),
-            )
-            mode = str(job.get("mode") or "generate").strip()
             if mode == "edit":
                 files = image_job_service.build_processor_files(job)
                 result = chatgpt_service.edit_with_pool(
@@ -679,9 +727,24 @@ def create_app() -> FastAPI:
                 updated_user = user_service.consume_user_quota(user_id, len(result_images))
                 if updated_user is None:
                     raise RuntimeError("failed to deduct local quota")
-            image_job_service.update_job_status(job_id, status="success", result_images=result_images)
+            image_job_service.update_job_status(job_id, status="success", result_images=result_images, failure_log=None)
         except Exception as exc:
-            image_job_service.update_job_status(job_id, status="error", error=str(exc))
+            image_job_service.update_job_status(
+                job_id,
+                status="error",
+                error=str(exc),
+                failure_log=_build_image_failure_log(
+                    exc,
+                    stage="async_job",
+                    mode=mode,
+                    delivery_mode="image_bed",
+                    upstream_endpoint=response_options.upstream_endpoint,
+                    model=model,
+                    count=count,
+                    size=size,
+                    reference_image_count=len(image_job_service.build_processor_files(job)) if mode == "edit" else 0,
+                ),
+            )
         finally:
             image_job_service.cleanup_job_inputs(job_id)
 
@@ -926,7 +989,19 @@ def create_app() -> FastAPI:
                 response_options,
             )
         except ImageGenerationError as exc:
-            raise HTTPException(status_code=502, detail={"error": str(exc)}) from exc
+            detail = {"error": str(exc)}
+            if _can_view_image_failure_log(context):
+                detail["failure_log"] = _build_image_failure_log(
+                    exc,
+                    stage="direct_request",
+                    mode="generate",
+                    delivery_mode=delivery_mode,
+                    upstream_endpoint=response_options.upstream_endpoint,
+                    model=body.model,
+                    count=body.n,
+                    size=normalize_image_size(body.size),
+                )
+            raise HTTPException(status_code=502, detail=detail) from exc
         generated_count = _count_generated_images(result)
         updated_user = _consume_user_quota_after_success(context, generated_count)
         if updated_user is not None:
@@ -1018,7 +1093,20 @@ def create_app() -> FastAPI:
                 response_options,
             )
         except ImageGenerationError as exc:
-            raise HTTPException(status_code=502, detail={"error": str(exc)}) from exc
+            detail = {"error": str(exc)}
+            if _can_view_image_failure_log(context):
+                detail["failure_log"] = _build_image_failure_log(
+                    exc,
+                    stage="direct_request",
+                    mode="edit",
+                    delivery_mode=normalized_delivery_mode,
+                    upstream_endpoint=response_options.upstream_endpoint,
+                    model=model,
+                    count=n,
+                    size=normalize_image_size(size),
+                    reference_image_count=len(images),
+                )
+            raise HTTPException(status_code=502, detail=detail) from exc
         generated_count = _count_generated_images(result)
         updated_user = _consume_user_quota_after_success(context, generated_count)
         if updated_user is not None:
@@ -1030,7 +1118,8 @@ def create_app() -> FastAPI:
         context = auth_service.require_authenticated(authorization)
         _, owner_id = _resolve_image_job_owner(context)
         items = image_job_service.list_jobs_for_user(owner_id)
-        return {"items": [_sanitize_image_job(item) for item in items]}
+        include_failure_log = _can_view_image_failure_log(context)
+        return {"items": [_sanitize_image_job(item, include_failure_log=include_failure_log) for item in items]}
 
     @router.post("/api/image-jobs")
     async def create_image_job(
@@ -1144,7 +1233,7 @@ def create_app() -> FastAPI:
             job = image_job_service.update_reference_images(str(job.get("id") or ""), saved_reference_images) or job
 
         image_job_service.dispatch_job(str(job.get("id") or ""), process_image_bed_job)
-        return {"item": _sanitize_image_job(job), "user": context.user}
+        return {"item": _sanitize_image_job(job, include_failure_log=_can_view_image_failure_log(context)), "user": context.user}
 
     @router.post("/v1/chat/completions")
     async def create_chat_completion(body: ChatCompletionRequest, authorization: str | None = Header(default=None)):
@@ -1172,6 +1261,7 @@ def create_app() -> FastAPI:
                 quota=body.quota,
                 allow_direct_mode=body.allow_direct_mode,
                 allow_image_bed_mode=body.allow_image_bed_mode,
+                allow_view_image_failure_log=body.allow_view_image_failure_log,
             )
         except ValueError as exc:
             message = str(exc)
@@ -1218,6 +1308,7 @@ def create_app() -> FastAPI:
             user_id,
             allow_direct_mode=body.allow_direct_mode,
             allow_image_bed_mode=body.allow_image_bed_mode,
+            allow_view_image_failure_log=body.allow_view_image_failure_log,
         )
         if user is None:
             raise HTTPException(status_code=404, detail={"error": "user not found"})

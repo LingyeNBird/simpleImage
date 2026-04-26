@@ -55,7 +55,9 @@ _WIN_KEYS = [
 
 
 class ImageGenerationError(Exception):
-    pass
+    def __init__(self, message: str, failure_log: str | None = None):
+        super().__init__(message)
+        self.failure_log = str(failure_log or "").strip() or None
 
 
 @dataclass

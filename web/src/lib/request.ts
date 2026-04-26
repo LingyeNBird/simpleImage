@@ -7,6 +7,16 @@ import {
     isPublicAuthPath,
 } from "@/store/auth";
 
+export class HttpRequestError extends Error {
+    failureLog?: string;
+
+    constructor(message: string, options?: { failureLog?: string }) {
+        super(message);
+        this.name = "HttpRequestError";
+        this.failureLog = options?.failureLog;
+    }
+}
+
 type RequestConfig = AxiosRequestConfig & {
     redirectOnUnauthorized?: boolean;
 };
@@ -28,7 +38,7 @@ request.interceptors.request.use(async (config) => {
 
 request.interceptors.response.use(
     (response) => response,
-    async (error: AxiosError<{ detail?: { error?: string }; error?: string; message?: string }>) => {
+    async (error: AxiosError<{ detail?: { error?: string; failure_log?: string }; error?: string; message?: string; failure_log?: string }>) => {
         const status = error.response?.status;
         const shouldRedirect = (error.config as RequestConfig | undefined)?.redirectOnUnauthorized !== false;
         if (status === 401 && shouldRedirect && typeof window !== "undefined") {
@@ -56,7 +66,11 @@ request.interceptors.response.use(
             payload?.message ||
             error.message ||
             `请求失败 (${status || 500})`;
-        return Promise.reject(new Error(message));
+        return Promise.reject(
+            new HttpRequestError(message, {
+                failureLog: payload?.detail?.failure_log || payload?.failure_log,
+            }),
+        );
     },
 );
 

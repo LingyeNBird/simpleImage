@@ -151,6 +151,7 @@ def _normalize_job(raw: object) -> dict[str, object] | None:
         "created_at": str(raw.get("created_at") or _now_iso()).strip() or _now_iso(),
         "updated_at": str(raw.get("updated_at") or raw.get("created_at") or _now_iso()).strip() or _now_iso(),
         "error": str(raw.get("error") or "").strip() or None,
+        "failure_log": str(raw.get("failure_log") or "").strip() or None,
         "reference_images": [
             item for item in (_normalize_reference_input(image) for image in (raw.get("reference_images") or [])) if item is not None
         ],
@@ -302,13 +303,22 @@ class ImageJobService:
             "created_at": now,
             "updated_at": now,
             "error": None,
+            "failure_log": None,
             "reference_images": reference_images,
             "result_images": [],
         }
         with self._lock:
             return self._replace_job(job)
 
-    def update_job_status(self, job_id: str, *, status: str, error: str | None = None, result_images: list[dict[str, object]] | None = None) -> dict[str, object] | None:
+    def update_job_status(
+        self,
+        job_id: str,
+        *,
+        status: str,
+        error: str | None = None,
+        failure_log: str | None = None,
+        result_images: list[dict[str, object]] | None = None,
+    ) -> dict[str, object] | None:
         normalized_job_id = str(job_id or "").strip()
         with self._lock:
             for index, current in enumerate(self._jobs):
@@ -318,6 +328,7 @@ class ImageJobService:
                 next_job["status"] = status
                 next_job["updated_at"] = _now_iso()
                 next_job["error"] = error.strip() if isinstance(error, str) and error.strip() else None
+                next_job["failure_log"] = failure_log.strip() if isinstance(failure_log, str) and failure_log.strip() else None
                 if result_images is not None:
                     next_job["result_images"] = result_images
                 self._jobs[index] = next_job
