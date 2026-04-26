@@ -1,7 +1,7 @@
 "use client";
 
-import { ArrowUp, ImagePlus, LoaderCircle, Settings2, X } from "lucide-react";
-import { useMemo, useState, type ClipboardEvent, type RefObject } from "react";
+import { ArrowUp, CircleHelp, ImagePlus, LoaderCircle, Settings2, X } from "lucide-react";
+import { useMemo, useState, type ClipboardEvent, type ReactNode, type RefObject } from "react";
 
 import { ImageLightbox } from "@/components/image-lightbox";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { Tooltip } from "@/components/ui/tooltip";
 import {
   IMAGE_RESPONSE_CANVAS_OPTIONS,
   IMAGE_RESPONSE_MODERATION_OPTIONS,
@@ -173,13 +174,6 @@ export function ImageComposer({
     void onReferenceImageChange(imageFiles);
   };
 
-  const deliveryModeDescription =
-    deliveryMode === "image_bed"
-      ? "使用图床，避免出现连接问题"
-      : showAllDeliveryModes && !imageBedAvailable
-        ? "图床模式暂未就绪，请先在存储桶管理中完成 COS 配置"
-        : "直接传输图片，耗时较久";
-
   const settingsSummary = `${mode === "edit" ? "图生图" : "文生图"} · ${imageCount || "1"} 张 · ${isResponseEndpoint ? "/response" : "/conversation"}${visibleDeliveryModes.length > 1 ? ` · ${deliveryMode === "image_bed" ? "图床" : "直传"}` : ""}`;
 
   return (
@@ -300,304 +294,315 @@ export function ImageComposer({
                         生图设置
                       </Button>
                     </DialogTrigger>
-                    <DialogContent className="w-[min(92vw,420px)] rounded-[28px] p-5">
-                      <DialogHeader>
+                    <DialogContent className="w-[min(96vw,760px)] max-h-[85vh] gap-0 overflow-hidden rounded-[32px] border-stone-200/80 p-0">
+                      <DialogHeader className="border-b border-stone-200/80 bg-white px-5 pb-4 pt-5 sm:px-6">
                         <DialogTitle>生图设置</DialogTitle>
                         <DialogDescription>{settingsSummary}</DialogDescription>
                       </DialogHeader>
 
-                        <div className="flex flex-col gap-5">
-                        <div className="flex items-center justify-between gap-3 rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3">
-                          <span className="text-sm font-medium text-stone-700">上游端点</span>
-                          <Select value={upstreamEndpoint} onValueChange={(value) => onUpstreamEndpointChange(value as ImageUpstreamEndpoint)}>
-                            <SelectTrigger className="h-9 min-w-[160px] rounded-full border-stone-200 bg-white px-3 text-sm font-medium text-stone-700 shadow-none focus-visible:ring-0">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {IMAGE_UPSTREAM_ENDPOINT_OPTIONS.map((option) => (
-                                <SelectItem key={option.value} value={option.value}>
-                                  {option.label}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-
-                        <div className="flex items-center justify-between gap-3 rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3">
-                          <span className="text-sm font-medium text-stone-700">生成张数</span>
-                          <Input
-                            type="number"
-                            min="1"
-                            max="10"
-                            step="1"
-                            value={imageCount}
-                            onChange={(event) => onImageCountChange(event.target.value)}
-                            className="h-9 w-20 rounded-full border-stone-200 bg-white px-3 text-center text-sm font-medium text-stone-700"
-                          />
-                        </div>
-
-                        {isResponseEndpoint ? (
-                          <>
-                            <div className="flex items-center justify-between gap-3 rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3">
-                              <span className="text-sm font-medium text-stone-700">画布</span>
-                              <Select value={responseCanvas} onValueChange={(value) => onResponseCanvasChange(value as ImageResponseCanvas)}>
-                                <SelectTrigger className="h-9 min-w-[140px] rounded-full border-stone-200 bg-white px-3 text-sm font-medium text-stone-700 shadow-none focus-visible:ring-0">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {IMAGE_RESPONSE_CANVAS_OPTIONS.map((option) => (
-                                    <SelectItem key={option.value} value={option.value}>
-                                      {option.label}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            </div>
-                            <div className="flex items-center justify-between gap-3 rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3">
-                              <span className="text-sm font-medium text-stone-700">分辨率</span>
-                              <Select value={responseResolution} onValueChange={(value) => onResponseResolutionChange(value as ImageResponseResolution)}>
-                                <SelectTrigger className="h-9 min-w-[148px] rounded-full border-stone-200 bg-white px-3 text-sm font-medium text-stone-700 shadow-none focus-visible:ring-0">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {IMAGE_RESPONSE_RESOLUTION_OPTIONS.map((option) => (
-                                    <SelectItem key={option.value} value={option.value}>
-                                      {option.label}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            </div>
-                            <div className="flex items-center justify-between gap-3 rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3">
-                              <span className="text-sm font-medium text-stone-700">质量</span>
-                              <Select value={responseQuality} onValueChange={(value) => onResponseQualityChange(value as ImageResponseQuality)}>
-                                <SelectTrigger className="h-9 min-w-[132px] rounded-full border-stone-200 bg-white px-3 text-sm font-medium text-stone-700 shadow-none focus-visible:ring-0">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {IMAGE_RESPONSE_QUALITY_OPTIONS.map((option) => (
-                                    <SelectItem key={option.value} value={option.value}>
-                                      {option.label}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            </div>
-                            <div className="flex items-center justify-between gap-3 rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3">
-                              <span className="text-sm font-medium text-stone-700">输出格式</span>
-                              <Select value={responseOutputFormat} onValueChange={(value) => onResponseOutputFormatChange(value as ImageResponseOutputFormat)}>
-                                <SelectTrigger className="h-9 min-w-[132px] rounded-full border-stone-200 bg-white px-3 text-sm font-medium text-stone-700 shadow-none focus-visible:ring-0">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {IMAGE_RESPONSE_OUTPUT_FORMAT_OPTIONS.map((option) => (
-                                    <SelectItem key={option.value} value={option.value}>
-                                      {option.label}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            </div>
-                            <div className="flex items-center justify-between gap-3 rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3">
-                              <span className="text-sm font-medium text-stone-700">压缩率</span>
-                              <Input
-                                type="number"
-                                min="0"
-                                max="100"
-                                step="1"
-                                value={responseOutputCompression === "auto" ? "" : responseOutputCompression}
-                                onChange={(event) => onResponseOutputCompressionChange(event.target.value || "auto")}
-                                disabled={responseOutputFormat === "png"}
-                                placeholder={responseOutputFormat === "png" ? "PNG 无压缩" : "自动"}
-                                className="h-9 w-28 rounded-full border-stone-200 bg-white px-3 text-center text-sm font-medium text-stone-700 disabled:bg-stone-100 disabled:text-stone-400"
-                              />
-                            </div>
-                            <div className="flex items-center justify-between gap-3 rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3">
-                              <span className="text-sm font-medium text-stone-700">审核强度</span>
-                              <Select value={responseModeration} onValueChange={(value) => onResponseModerationChange(value as ImageResponseModeration)}>
-                                <SelectTrigger className="h-9 min-w-[132px] rounded-full border-stone-200 bg-white px-3 text-sm font-medium text-stone-700 shadow-none focus-visible:ring-0">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {IMAGE_RESPONSE_MODERATION_OPTIONS.map((option) => (
-                                    <SelectItem key={option.value} value={option.value}>
-                                      {option.label}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            </div>
-                            <div className="grid gap-3 rounded-2xl border border-stone-200 bg-stone-50 px-4 py-4">
-                              <div className="text-sm font-medium text-stone-700">Response 模型设置</div>
-                              <div className="flex items-center justify-between gap-3">
-                                <span className="text-sm text-stone-700">主模型</span>
-                                <Input
-                                  value={responseMainModel}
-                                  onChange={(event) => onResponseMainModelChange(event.target.value)}
-                                  className="h-9 w-[180px] rounded-full border-stone-200 bg-white px-3 text-sm text-stone-700"
-                                />
-                              </div>
-                              <div className="flex items-center justify-between gap-3">
-                                <span className="text-sm text-stone-700">工具模型</span>
-                                <Input
-                                  value={responseToolModel}
-                                  onChange={(event) => onResponseToolModelChange(event.target.value)}
-                                  placeholder="auto / gpt-image-2"
-                                  className="h-9 w-[180px] rounded-full border-stone-200 bg-white px-3 text-sm text-stone-700"
-                                />
-                              </div>
-                            </div>
-                            <div className="grid gap-3 rounded-2xl border border-stone-200 bg-stone-50 px-4 py-4">
-                              <div className="text-sm font-medium text-stone-700">Response 推理设置</div>
-                              <div className="flex items-center justify-between gap-3">
-                                <span className="text-sm text-stone-700">推理强度</span>
-                                <Select value={responseReasoningEffort} onValueChange={(value) => onResponseReasoningEffortChange(value as ImageResponseReasoningEffort)}>
-                                  <SelectTrigger className="h-9 min-w-[132px] rounded-full border-stone-200 bg-white px-3 text-sm text-stone-700 shadow-none focus-visible:ring-0">
+                      <div className="max-h-[calc(85vh-88px)] overflow-y-auto bg-stone-50/80 px-4 py-4 sm:px-6 sm:py-5">
+                        <div className="flex flex-col gap-4">
+                          <SettingsSection
+                            title="基础设置"
+                            description="优先放常用项，移动端打开后能更快完成核心配置。"
+                          >
+                            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                              <SettingsField label="上游端点" hint="切换 /conversation 与 /response 两条上游调用链。">
+                                <Select value={upstreamEndpoint} onValueChange={(value) => onUpstreamEndpointChange(value as ImageUpstreamEndpoint)}>
+                                  <SelectTrigger className={SETTINGS_CONTROL_CLASS}>
                                     <SelectValue />
                                   </SelectTrigger>
                                   <SelectContent>
-                                    {IMAGE_RESPONSE_REASONING_EFFORT_OPTIONS.map((option) => (
+                                    {IMAGE_UPSTREAM_ENDPOINT_OPTIONS.map((option) => (
                                       <SelectItem key={option.value} value={option.value}>
                                         {option.label}
                                       </SelectItem>
                                     ))}
                                   </SelectContent>
                                 </Select>
-                              </div>
-                              <div className="flex items-center justify-between gap-3">
-                                <span className="text-sm text-stone-700">推理摘要</span>
-                                <Select value={responseReasoningSummary} onValueChange={(value) => onResponseReasoningSummaryChange(value as ImageResponseReasoningSummary)}>
-                                  <SelectTrigger className="h-9 min-w-[132px] rounded-full border-stone-200 bg-white px-3 text-sm text-stone-700 shadow-none focus-visible:ring-0">
-                                    <SelectValue />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {IMAGE_RESPONSE_REASONING_SUMMARY_OPTIONS.map((option) => (
-                                      <SelectItem key={option.value} value={option.value}>
-                                        {option.label}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                              <div className="flex items-center justify-between gap-3">
-                                <span className="text-sm text-stone-700">阶段预览数</span>
+                              </SettingsField>
+
+                              <SettingsField label="生成张数" hint="控制一次请求返回的图片数量。">
                                 <Input
                                   type="number"
-                                  min="0"
+                                  min="1"
+                                  max="10"
                                   step="1"
-                                  value={responsePartialImages}
-                                  onChange={(event) => onResponsePartialImagesChange(event.target.value)}
-                                  className="h-9 w-28 rounded-full border-stone-200 bg-white px-3 text-center text-sm text-stone-700"
+                                  value={imageCount}
+                                  onChange={(event) => onImageCountChange(event.target.value)}
+                                  className={SETTINGS_INPUT_CLASS}
                                 />
-                              </div>
-                            </div>
-                            <div className="grid gap-3 rounded-2xl border border-stone-200 bg-stone-50 px-4 py-4">
-                              <div className="text-sm font-medium text-stone-700">Response 行为设置</div>
-                              <div className="flex items-center justify-between gap-3">
-                                <span className="text-sm text-stone-700">工具选择</span>
-                                <Select value={responseToolChoice} onValueChange={(value) => onResponseToolChoiceChange(value as ImageResponseToolChoice)}>
-                                  <SelectTrigger className="h-9 min-w-[132px] rounded-full border-stone-200 bg-white px-3 text-sm text-stone-700 shadow-none focus-visible:ring-0">
-                                    <SelectValue />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {IMAGE_RESPONSE_TOOL_CHOICE_OPTIONS.map((option) => (
-                                      <SelectItem key={option.value} value={option.value}>
-                                        {option.label}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                              <div className="flex items-center justify-between gap-3">
-                                <label className="text-sm text-stone-700" htmlFor="response-parallel-tool-calls">并行工具调用</label>
-                                <Checkbox
-                                  id="response-parallel-tool-calls"
-                                  checked={responseParallelToolCalls}
-                                  onCheckedChange={(checked) => onResponseParallelToolCallsChange(Boolean(checked))}
-                                />
-                              </div>
-                              <div className="flex items-center justify-between gap-3">
-                                <label className="text-sm text-stone-700" htmlFor="response-encrypted-reasoning">返回加密推理</label>
-                                <Checkbox
-                                  id="response-encrypted-reasoning"
-                                  checked={responseIncludeEncryptedReasoning}
-                                  onCheckedChange={(checked) => onResponseIncludeEncryptedReasoningChange(Boolean(checked))}
-                                />
-                              </div>
-                              <div className="flex items-center justify-between gap-3">
-                                <label className="text-sm text-stone-700" htmlFor="response-store">保存到上游 store</label>
-                                <Checkbox id="response-store" checked={responseStore} onCheckedChange={(checked) => onResponseStoreChange(Boolean(checked))} />
-                              </div>
-                            </div>
-                            <div className="grid gap-3 rounded-2xl border border-stone-200 bg-stone-50 px-4 py-4">
-                              <div className="text-sm font-medium text-stone-700">系统指令</div>
-                              <Textarea
-                                value={responseInstructions}
-                                onChange={(event) => onResponseInstructionsChange(event.target.value)}
-                                placeholder="可选，补充给 Responses 主模型的 instructions"
-                                className="min-h-24 rounded-2xl border-stone-200 bg-white px-4 py-3 text-sm text-stone-700 shadow-none focus-visible:ring-0"
-                              />
-                            </div>
-                          </>
-                        ) : (
-                          <div className="flex items-center justify-between gap-3 rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3">
-                            <span className="text-sm font-medium text-stone-700">图片比例</span>
-                            <Select value={imageSize} onValueChange={onImageSizeChange}>
-                              <SelectTrigger
-                                className="h-9 min-w-[140px] rounded-full border-stone-200 bg-white px-3 text-sm font-medium text-stone-700 shadow-none focus-visible:ring-0"
-                                onClick={(event) => event.stopPropagation()}
-                              >
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {IMAGE_SIZE_OPTIONS.map((option) => (
-                                  <SelectItem key={option} value={option}>
-                                    {IMAGE_SIZE_LABELS[option] || option}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                        )}
+                              </SettingsField>
 
-                        {visibleDeliveryModes.length > 1 ? (
-                          <div className="flex flex-col gap-3 rounded-2xl border border-stone-200 bg-stone-50 px-4 py-4">
-                            <div className="text-sm font-medium text-stone-700">传输模式</div>
-                            <div className="flex flex-wrap gap-2">
-                              {visibleDeliveryModes.includes("direct") ? (
-                                <ModeButton
-                                  active={deliveryMode === "direct"}
-                                  onClick={() => onDeliveryModeChange("direct")}
-                                  title="直接传输图片，耗时较久"
-                                >
-                                  直传
-                                </ModeButton>
-                              ) : null}
-                              {visibleDeliveryModes.includes("image_bed") ? (
-                                <ModeButton
-                                  active={deliveryMode === "image_bed"}
-                                  disabled={!imageBedAvailable}
-                                  onClick={() => onDeliveryModeChange("image_bed")}
-                                  title={imageBedAvailable ? "使用图床，避免出现连接问题" : "请先在存储桶管理中配置可用图床"}
-                                >
-                                  图床
-                                </ModeButton>
+                              {!isResponseEndpoint ? (
+                                <SettingsField label="图片比例" hint="用于文生图和图生图的目标画面比例。">
+                                  <Select value={imageSize} onValueChange={onImageSizeChange}>
+                                    <SelectTrigger className={SETTINGS_CONTROL_CLASS} onClick={(event) => event.stopPropagation()}>
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {IMAGE_SIZE_OPTIONS.map((option) => (
+                                        <SelectItem key={option} value={option}>
+                                          {IMAGE_SIZE_LABELS[option] || option}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                </SettingsField>
                               ) : null}
                             </div>
-                            <div className="text-xs leading-5 text-stone-500">{deliveryModeDescription}</div>
-                          </div>
-                        ) : null}
+                          </SettingsSection>
 
-                        <div className="flex flex-col gap-3 rounded-2xl border border-stone-200 bg-stone-50 px-4 py-4">
-                          <div className="text-sm font-medium text-stone-700">生图类型</div>
-                          <div className="flex flex-wrap gap-2">
-                            <ModeButton active={mode === "generate"} onClick={() => onModeChange("generate")}>
-                              文生图
-                            </ModeButton>
-                            <ModeButton active={mode === "edit"} onClick={() => onModeChange("edit")}>
-                              图生图
-                            </ModeButton>
-                          </div>
+                          <SettingsSection title="生图类型" description="按当前任务切换文生图或图生图。">
+                            <div className="grid gap-3 sm:grid-cols-2">
+                              <ModeButton active={mode === "generate"} onClick={() => onModeChange("generate")}>
+                                文生图
+                              </ModeButton>
+                              <ModeButton active={mode === "edit"} onClick={() => onModeChange("edit")}>
+                                图生图
+                              </ModeButton>
+                            </div>
+                          </SettingsSection>
+
+                          {visibleDeliveryModes.length > 1 ? (
+                            <SettingsSection title="传输模式" description="不同模式适合不同网络和存储场景。">
+                              <div className="flex flex-col gap-3">
+                                <div className="grid gap-3 sm:grid-cols-2">
+                                  {visibleDeliveryModes.includes("direct") ? (
+                                    <div className="flex items-center gap-2">
+                                      <ModeButton active={deliveryMode === "direct"} onClick={() => onDeliveryModeChange("direct")}>
+                                        直传
+                                      </ModeButton>
+                                      <InfoTooltip content="直接传输图片，流程更直观，但耗时通常更久。" />
+                                    </div>
+                                  ) : null}
+                                  {visibleDeliveryModes.includes("image_bed") ? (
+                                    <div className="flex items-center gap-2">
+                                      <ModeButton
+                                        active={deliveryMode === "image_bed"}
+                                        disabled={!imageBedAvailable}
+                                        onClick={() => onDeliveryModeChange("image_bed")}
+                                      >
+                                        图床
+                                      </ModeButton>
+                                      <InfoTooltip content={imageBedAvailable ? "使用图床交付结果，通常更稳，适合避免直连传输问题。" : "请先在存储桶管理中配置可用图床。"} />
+                                    </div>
+                                  ) : null}
+                                </div>
+                                <div className="rounded-2xl border border-dashed border-stone-200 bg-white/80 px-4 py-3 text-sm text-stone-600">
+                                  当前：<span className="font-medium text-stone-800">{deliveryMode === "image_bed" ? "图床模式" : "直传模式"}</span>
+                                </div>
+                              </div>
+                            </SettingsSection>
+                          ) : null}
+
+                          {isResponseEndpoint ? (
+                            <>
+                              <SettingsSection title="图像输出" description="控制响应式生图的画布、质量和输出形态。">
+                                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                                  <SettingsField label="画布" hint="决定生成区域与边距倾向。">
+                                    <Select value={responseCanvas} onValueChange={(value) => onResponseCanvasChange(value as ImageResponseCanvas)}>
+                                      <SelectTrigger className={SETTINGS_CONTROL_CLASS}>
+                                        <SelectValue />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        {IMAGE_RESPONSE_CANVAS_OPTIONS.map((option) => (
+                                          <SelectItem key={option.value} value={option.value}>
+                                            {option.label}
+                                          </SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                  </SettingsField>
+
+                                  <SettingsField label="分辨率" hint="提高分辨率会带来更高细节与更长处理时间。">
+                                    <Select value={responseResolution} onValueChange={(value) => onResponseResolutionChange(value as ImageResponseResolution)}>
+                                      <SelectTrigger className={SETTINGS_CONTROL_CLASS}>
+                                        <SelectValue />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        {IMAGE_RESPONSE_RESOLUTION_OPTIONS.map((option) => (
+                                          <SelectItem key={option.value} value={option.value}>
+                                            {option.label}
+                                          </SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                  </SettingsField>
+
+                                  <SettingsField label="质量" hint="质量越高，通常越清晰，但会增加耗时与资源消耗。">
+                                    <Select value={responseQuality} onValueChange={(value) => onResponseQualityChange(value as ImageResponseQuality)}>
+                                      <SelectTrigger className={SETTINGS_CONTROL_CLASS}>
+                                        <SelectValue />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        {IMAGE_RESPONSE_QUALITY_OPTIONS.map((option) => (
+                                          <SelectItem key={option.value} value={option.value}>
+                                            {option.label}
+                                          </SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                  </SettingsField>
+
+                                  <SettingsField label="输出格式" hint="PNG 无损，JPEG / WEBP 更适合压缩传输。">
+                                    <Select value={responseOutputFormat} onValueChange={(value) => onResponseOutputFormatChange(value as ImageResponseOutputFormat)}>
+                                      <SelectTrigger className={SETTINGS_CONTROL_CLASS}>
+                                        <SelectValue />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        {IMAGE_RESPONSE_OUTPUT_FORMAT_OPTIONS.map((option) => (
+                                          <SelectItem key={option.value} value={option.value}>
+                                            {option.label}
+                                          </SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                  </SettingsField>
+
+                                  <SettingsField label="压缩率" hint="仅对有损格式生效；留空时按自动策略处理。">
+                                    <Input
+                                      type="number"
+                                      min="0"
+                                      max="100"
+                                      step="1"
+                                      value={responseOutputCompression === "auto" ? "" : responseOutputCompression}
+                                      onChange={(event) => onResponseOutputCompressionChange(event.target.value || "auto")}
+                                      disabled={responseOutputFormat === "png"}
+                                      placeholder={responseOutputFormat === "png" ? "PNG 无压缩" : "自动"}
+                                      className={cn(SETTINGS_INPUT_CLASS, "disabled:bg-stone-100 disabled:text-stone-400")}
+                                    />
+                                  </SettingsField>
+
+                                  <SettingsField label="审核强度" hint="控制上游安全审核策略的严格程度。">
+                                    <Select value={responseModeration} onValueChange={(value) => onResponseModerationChange(value as ImageResponseModeration)}>
+                                      <SelectTrigger className={SETTINGS_CONTROL_CLASS}>
+                                        <SelectValue />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        {IMAGE_RESPONSE_MODERATION_OPTIONS.map((option) => (
+                                          <SelectItem key={option.value} value={option.value}>
+                                            {option.label}
+                                          </SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                  </SettingsField>
+                                </div>
+                              </SettingsSection>
+
+                              <SettingsSection title="模型与推理" description="把模型、推理和预览参数集中管理，减少来回滚动。">
+                                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                                  <SettingsField label="主模型" hint="Responses 主流程使用的模型名称。">
+                                    <Input
+                                      value={responseMainModel}
+                                      onChange={(event) => onResponseMainModelChange(event.target.value)}
+                                      className={SETTINGS_INPUT_CLASS}
+                                    />
+                                  </SettingsField>
+
+                                  <SettingsField label="工具模型" hint="用于图像工具调用的模型，可留 auto 自动决策。">
+                                    <Input
+                                      value={responseToolModel}
+                                      onChange={(event) => onResponseToolModelChange(event.target.value)}
+                                      placeholder="auto / gpt-image-2"
+                                      className={SETTINGS_INPUT_CLASS}
+                                    />
+                                  </SettingsField>
+
+                                  <SettingsField label="推理强度" hint="更高推理强度通常更稳，但速度更慢。">
+                                    <Select value={responseReasoningEffort} onValueChange={(value) => onResponseReasoningEffortChange(value as ImageResponseReasoningEffort)}>
+                                      <SelectTrigger className={SETTINGS_CONTROL_CLASS}>
+                                        <SelectValue />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        {IMAGE_RESPONSE_REASONING_EFFORT_OPTIONS.map((option) => (
+                                          <SelectItem key={option.value} value={option.value}>
+                                            {option.label}
+                                          </SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                  </SettingsField>
+
+                                  <SettingsField label="推理摘要" hint="决定是否返回简短推理摘要信息。">
+                                    <Select value={responseReasoningSummary} onValueChange={(value) => onResponseReasoningSummaryChange(value as ImageResponseReasoningSummary)}>
+                                      <SelectTrigger className={SETTINGS_CONTROL_CLASS}>
+                                        <SelectValue />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        {IMAGE_RESPONSE_REASONING_SUMMARY_OPTIONS.map((option) => (
+                                          <SelectItem key={option.value} value={option.value}>
+                                            {option.label}
+                                          </SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                  </SettingsField>
+
+                                  <SettingsField label="阶段预览数" hint="控制返回中间预览图的数量，0 表示关闭。">
+                                    <Input
+                                      type="number"
+                                      min="0"
+                                      step="1"
+                                      value={responsePartialImages}
+                                      onChange={(event) => onResponsePartialImagesChange(event.target.value)}
+                                      className={SETTINGS_INPUT_CLASS}
+                                    />
+                                  </SettingsField>
+                                </div>
+                              </SettingsSection>
+
+                              <SettingsSection title="行为开关" description="把低频开关收进统一风格的块状卡片里。">
+                                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                                  <ToggleField
+                                    id="response-parallel-tool-calls"
+                                    label="并行工具调用"
+                                    hint="允许工具并发执行，适合复杂生成链路。"
+                                    checked={responseParallelToolCalls}
+                                    onCheckedChange={onResponseParallelToolCallsChange}
+                                  />
+                                  <ToggleField
+                                    id="response-encrypted-reasoning"
+                                    label="返回加密推理"
+                                    hint="返回加密后的推理内容，便于上游做更完整的保留。"
+                                    checked={responseIncludeEncryptedReasoning}
+                                    onCheckedChange={onResponseIncludeEncryptedReasoningChange}
+                                  />
+                                  <ToggleField
+                                    id="response-store"
+                                    label="保存到上游 store"
+                                    hint="将本次结果持久保存到上游侧的 store。"
+                                    checked={responseStore}
+                                    onCheckedChange={onResponseStoreChange}
+                                  />
+                                  <SettingsField label="工具选择" hint="控制是否强制使用图像工具或交给模型自动判断。">
+                                    <Select value={responseToolChoice} onValueChange={(value) => onResponseToolChoiceChange(value as ImageResponseToolChoice)}>
+                                      <SelectTrigger className={SETTINGS_CONTROL_CLASS}>
+                                        <SelectValue />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        {IMAGE_RESPONSE_TOOL_CHOICE_OPTIONS.map((option) => (
+                                          <SelectItem key={option.value} value={option.value}>
+                                            {option.label}
+                                          </SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                  </SettingsField>
+                                </div>
+                              </SettingsSection>
+
+                              <SettingsSection title="系统指令" description="可选，用于给 Responses 主模型补充统一约束。">
+                                <Textarea
+                                  value={responseInstructions}
+                                  onChange={(event) => onResponseInstructionsChange(event.target.value)}
+                                  placeholder="可选，补充给 Responses 主模型的 instructions"
+                                  className="min-h-28 rounded-3xl border-stone-200 bg-white px-4 py-3 text-sm text-stone-700 shadow-none focus-visible:ring-0"
+                                />
+                              </SettingsSection>
+                            </>
+                          ) : null}
                         </div>
                       </div>
                     </DialogContent>
@@ -628,13 +633,11 @@ function ModeButton({
   children,
   onClick,
   disabled,
-  title,
 }: {
   active: boolean;
   children: string;
   onClick: () => void;
   disabled?: boolean;
-  title?: string;
 }) {
   return (
     <button
@@ -645,17 +648,110 @@ function ModeButton({
         }
       }}
       disabled={disabled}
-      title={title}
       className={cn(
-        "rounded-full px-4 py-2 text-sm font-medium transition",
+        "flex min-h-12 w-full flex-1 items-center justify-center rounded-2xl border px-4 py-3 text-sm font-medium transition",
         active
-          ? "bg-stone-950 text-white"
+          ? "border-stone-950 bg-stone-950 text-white shadow-[0_12px_30px_-18px_rgba(15,23,42,0.5)]"
           : disabled
-            ? "cursor-not-allowed bg-stone-100 text-stone-400"
-            : "bg-stone-100 text-stone-600 hover:bg-stone-200",
+            ? "cursor-not-allowed border-stone-200 bg-stone-100 text-stone-400"
+            : "border-stone-200 bg-white text-stone-700 hover:border-stone-300 hover:bg-stone-100",
       )}
     >
       {children}
     </button>
+  );
+}
+
+const SETTINGS_SECTION_CLASS =
+  "rounded-[28px] border border-stone-200 bg-white p-4 shadow-[0_18px_50px_-35px_rgba(15,23,42,0.35)] sm:p-5";
+
+const SETTINGS_FIELD_CLASS =
+  "flex h-full flex-col gap-3 rounded-2xl border border-stone-200/80 bg-stone-50 px-4 py-4";
+
+const SETTINGS_CONTROL_CLASS =
+  "h-11 rounded-2xl border-stone-200 bg-white px-4 text-sm font-medium text-stone-700 shadow-none focus-visible:ring-0";
+
+const SETTINGS_INPUT_CLASS =
+  "h-11 rounded-2xl border-stone-200 bg-white px-4 text-sm font-medium text-stone-700 shadow-none focus-visible:ring-0";
+
+function SettingsSection({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description?: string;
+  children: ReactNode;
+}) {
+  return (
+    <section className={SETTINGS_SECTION_CLASS}>
+      <div className="mb-4 flex flex-col gap-1.5">
+        <h3 className="text-sm font-semibold text-stone-900">{title}</h3>
+        {description ? <p className="text-xs leading-5 text-stone-500">{description}</p> : null}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function SettingsField({
+  label,
+  hint,
+  children,
+}: {
+  label: string;
+  hint?: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className={SETTINGS_FIELD_CLASS}>
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-sm font-medium text-stone-700">{label}</span>
+        {hint ? <InfoTooltip content={hint} /> : null}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function ToggleField({
+  id,
+  label,
+  hint,
+  checked,
+  onCheckedChange,
+}: {
+  id: string;
+  label: string;
+  hint?: string;
+  checked: boolean;
+  onCheckedChange: (value: boolean) => void;
+}) {
+  return (
+    <div className={SETTINGS_FIELD_CLASS}>
+      <div className="flex items-start justify-between gap-3">
+        <label className="text-sm font-medium text-stone-700" htmlFor={id}>
+          {label}
+        </label>
+        <div className="flex items-center gap-2">
+          {hint ? <InfoTooltip content={hint} /> : null}
+          <Checkbox id={id} checked={checked} onCheckedChange={(value) => onCheckedChange(Boolean(value))} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function InfoTooltip({ content }: { content: string }) {
+  return (
+    <Tooltip content={content} contentClassName="max-w-[260px] whitespace-normal">
+      <button
+        type="button"
+        className="inline-flex size-7 items-center justify-center rounded-full border border-stone-200 bg-white text-stone-500 transition hover:border-stone-300 hover:text-stone-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-300"
+        aria-label={`查看${content.slice(0, 12)}说明`}
+      >
+        <CircleHelp className="size-3.5" />
+      </button>
+    </Tooltip>
   );
 }
