@@ -57,6 +57,7 @@ import {
   isImageResponseOutputFormat,
   isImageResponseResolution,
   isImageResponseToolChoice,
+  normalizeImageResponseResolution,
   normalizeImageResponsePartialImages,
   parseImageResponseBoolean,
   normalizeImageResponseOutputCompression,
@@ -229,7 +230,9 @@ function buildConversationFromImageJob(job: ImageJob): ImageConversation {
         upstreamEndpoint: job.upstream_endpoint === "response" ? "response" : "conversation",
         responseCanvas: job.response_canvas === "opaque" || job.response_canvas === "transparent" ? job.response_canvas : "auto",
         responseResolution:
-          typeof job.response_resolution === "string" && isImageResponseResolution(job.response_resolution) ? job.response_resolution : "auto",
+          typeof job.response_resolution === "string" && isImageResponseResolution(job.response_resolution)
+            ? normalizeImageResponseResolution(job.response_resolution)
+            : "auto",
         responseQuality:
           job.response_quality === "low" || job.response_quality === "medium" || job.response_quality === "high"
             ? job.response_quality
@@ -563,10 +566,10 @@ export default function ImagePage() {
             if (storedResponseCanvas === "opaque" || storedResponseCanvas === "transparent" || storedResponseCanvas === "auto") {
               setResponseCanvas(storedResponseCanvas);
             }
-            const storedResponseResolution = window.localStorage.getItem(IMAGE_RESPONSE_RESOLUTION_STORAGE_KEY);
-            if (storedResponseResolution && isImageResponseResolution(storedResponseResolution)) {
-              setResponseResolution(storedResponseResolution);
-            }
+      const storedResponseResolution = window.localStorage.getItem(IMAGE_RESPONSE_RESOLUTION_STORAGE_KEY);
+      if (storedResponseResolution && isImageResponseResolution(storedResponseResolution)) {
+        setResponseResolution(normalizeImageResponseResolution(storedResponseResolution));
+      }
             const storedResponseQuality = window.localStorage.getItem(IMAGE_RESPONSE_QUALITY_STORAGE_KEY);
             if (
               storedResponseQuality === "low" ||

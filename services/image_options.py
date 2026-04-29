@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import re
 
 
 IMAGE_UPSTREAM_ENDPOINT_CONVERSATION = "conversation"
@@ -49,6 +50,7 @@ ALLOWED_RESPONSE_MODERATIONS = {"auto", "low"}
 ALLOWED_RESPONSE_REASONING_EFFORTS = {"low", "medium", "high"}
 ALLOWED_RESPONSE_REASONING_SUMMARIES = {"auto", "concise", "detailed"}
 ALLOWED_RESPONSE_TOOL_CHOICES = {"auto", "required"}
+CUSTOM_RESPONSE_RESOLUTION_PATTERN = re.compile(r"^\d{2,5}x\d{2,5}$")
 
 
 def normalize_image_upstream_endpoint(value: object) -> str:
@@ -68,7 +70,9 @@ def normalize_response_canvas(value: object) -> str:
 
 def normalize_response_resolution(value: object) -> str:
     normalized = str(value or "").strip().lower()
-    return normalized if normalized in ALLOWED_RESPONSE_RESOLUTIONS else DEFAULT_RESPONSE_RESOLUTION
+    if normalized in ALLOWED_RESPONSE_RESOLUTIONS:
+        return normalized
+    return normalized if CUSTOM_RESPONSE_RESOLUTION_PATTERN.fullmatch(normalized) else DEFAULT_RESPONSE_RESOLUTION
 
 
 def normalize_response_quality(value: object) -> str:

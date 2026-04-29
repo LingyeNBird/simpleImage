@@ -32,6 +32,7 @@ import {
   type ImageResponseResolution,
   type ImageResponseToolChoice,
   type ImageUpstreamEndpoint,
+  normalizeImageResponseResolution,
 } from "@/lib/image-generation-options";
 import type { ImageDeliveryMode } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -415,19 +416,23 @@ export function ImageComposer({
                                     </Select>
                                   </SettingsField>
 
-                                  <SettingsField label="分辨率" hint="提高分辨率会带来更高细节与更长处理时间。">
-                                    <Select value={responseResolution} onValueChange={(value) => onResponseResolutionChange(value as ImageResponseResolution)}>
-                                      <SelectTrigger className={SETTINGS_CONTROL_CLASS}>
-                                        <SelectValue />
-                                      </SelectTrigger>
-                                      <SelectContent>
+                                  <SettingsField label="分辨率" hint="提高分辨率会带来更高细节与更长处理时间，也支持直接输入自定义 WxH。">
+                                    <>
+                                      <Input
+                                        list="cpa-resolution-options"
+                                        value={responseResolution}
+                                        onChange={(event) => onResponseResolutionChange(normalizeImageResponseResolution(event.target.value))}
+                                        placeholder="auto 或 1536x1024"
+                                        className={SETTINGS_INPUT_CLASS}
+                                      />
+                                      <datalist id="cpa-resolution-options">
                                         {IMAGE_RESPONSE_RESOLUTION_OPTIONS.map((option) => (
-                                          <SelectItem key={option.value} value={option.value}>
+                                          <option key={option.value} value={option.value}>
                                             {option.label}
-                                          </SelectItem>
+                                          </option>
                                         ))}
-                                      </SelectContent>
-                                    </Select>
+                                      </datalist>
+                                    </>
                                   </SettingsField>
 
                                   <SettingsField label="质量" hint="质量越高，通常越清晰，但会增加耗时与资源消耗。">

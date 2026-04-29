@@ -1,15 +1,6 @@
 export type ImageUpstreamEndpoint = "conversation" | "response";
 export type ImageResponseCanvas = "auto" | "opaque" | "transparent";
-export type ImageResponseResolution =
-  | "auto"
-  | "1024x1024"
-  | "1536x1024"
-  | "1024x1536"
-  | "2048x2048"
-  | "2560x1440"
-  | "1440x2560"
-  | "3840x2160"
-  | "2160x3840";
+export type ImageResponseResolution = string;
 export type ImageResponseQuality = "auto" | "low" | "medium" | "high";
 export type ImageResponseOutputFormat = "png" | "jpeg" | "webp";
 export type ImageResponseModeration = "auto" | "low";
@@ -101,7 +92,16 @@ export const IMAGE_RESPONSE_RESOLUTION_OPTIONS: Array<{ value: ImageResponseReso
 ];
 
 export function isImageResponseResolution(value: string): value is ImageResponseResolution {
-  return IMAGE_RESPONSE_RESOLUTION_VALUES.includes(value as ImageResponseResolution);
+  const normalized = String(value || "").trim().toLowerCase();
+  return IMAGE_RESPONSE_RESOLUTION_VALUES.includes(normalized as (typeof IMAGE_RESPONSE_RESOLUTION_VALUES)[number]) || /^\d{2,5}x\d{2,5}$/.test(normalized);
+}
+
+export function normalizeImageResponseResolution(value: string): ImageResponseResolution {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (!normalized) {
+    return DEFAULT_IMAGE_RESPONSE_RESOLUTION;
+  }
+  return isImageResponseResolution(normalized) ? normalized : DEFAULT_IMAGE_RESPONSE_RESOLUTION;
 }
 
 export const IMAGE_RESPONSE_QUALITY_OPTIONS: Array<{ value: ImageResponseQuality; label: string }> = [
