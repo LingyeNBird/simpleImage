@@ -1,7 +1,7 @@
 "use client";
 
 import { ArrowUp, CircleHelp, ImagePlus, LoaderCircle, Settings2, X } from "lucide-react";
-import { useMemo, useState, type ClipboardEvent, type ReactNode, type RefObject } from "react";
+import { useEffect, useMemo, useState, type ClipboardEvent, type ReactNode, type RefObject } from "react";
 
 import { ImageLightbox } from "@/components/image-lightbox";
 import { Button } from "@/components/ui/button";
@@ -154,6 +154,7 @@ export function ImageComposer({
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState(0);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [responseResolutionDraft, setResponseResolutionDraft] = useState(responseResolution);
   const visibleDeliveryModes = useMemo<ImageDeliveryMode[]>(
     () => (showAllDeliveryModes ? ["direct", "image_bed"] : availableDeliveryModes),
     [availableDeliveryModes, showAllDeliveryModes],
@@ -164,6 +165,16 @@ export function ImageComposer({
     [referenceImages],
   );
   const isResponseEndpoint = upstreamEndpoint === "response";
+
+  useEffect(() => {
+    setResponseResolutionDraft(responseResolution);
+  }, [responseResolution]);
+
+  const commitResponseResolutionDraft = () => {
+    const normalized = normalizeImageResponseResolution(responseResolutionDraft);
+    setResponseResolutionDraft(normalized);
+    onResponseResolutionChange(normalized);
+  };
 
   const handleTextareaPaste = (event: ClipboardEvent<HTMLTextAreaElement>) => {
     const imageFiles = Array.from(event.clipboardData.files).filter((file) => file.type.startsWith("image/"));
@@ -420,8 +431,15 @@ export function ImageComposer({
                                     <>
                                       <Input
                                         list="cpa-resolution-options"
-                                        value={responseResolution}
-                                        onChange={(event) => onResponseResolutionChange(normalizeImageResponseResolution(event.target.value))}
+                                        value={responseResolutionDraft}
+                                        onChange={(event) => setResponseResolutionDraft(event.target.value)}
+                                        onBlur={commitResponseResolutionDraft}
+                                        onKeyDown={(event) => {
+                                          if (event.key === "Enter") {
+                                            event.preventDefault();
+                                            commitResponseResolutionDraft();
+                                          }
+                                        }}
                                         placeholder="auto 或 1536x1024"
                                         className={SETTINGS_INPUT_CLASS}
                                       />
