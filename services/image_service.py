@@ -659,25 +659,52 @@ def _fetch_download_url(session: Session, access_token: str, device_id: str, con
     return str((response.json() or {}).get("download_url") or "")
 
 
+def _download_image_bytes(session: Session, download_url: str) -> bytes:
+    response = _retry(
+        lambda: session.get(download_url, timeout=60),
+        retries=3,
+        delay=2.0,
+        retry_on_status=(403, 429, 500, 502, 503, 504),
+    )
+    if not getattr(response, "ok", False):
+        status_code = getattr(response, "status_code", "unknown")
+        response_text = str(getattr(response, "text", "") or "").strip()[:400]
+        raise ImageGenerationError(
+            "download image failed",
+            failure_log="\n".join(
+                part
+                for part in [
+                    f"download_url={download_url}",
+                    f"status_code={status_code}",
+                    f"response_body={response_text}" if response_text else None,
+                ]
+                if part
+            ),
+        )
+    content = getattr(response, "content", b"") or b""
+    if not content:
+        raise ImageGenerationError(
+            "download image failed",
+            failure_log=f"download_url={download_url}\nreason=empty_body",
+        )
+    return content
+
+
 def _download_as_base64(session: Session, download_url: str) -> str:
-    response = session.get(download_url, timeout=60)
-    if not response.ok or not response.content:
-        raise ImageGenerationError("download image failed")
-    return base64.b64encode(response.content).decode("ascii")
+    image_bytes = _download_image_bytes(session, download_url)
+    return base64.b64encode(image_bytes).decode("ascii")
 
 
 def _save_downloaded_image(session: Session, download_url: str, mime_type: str = "image/png") -> SavedImageFile:
-    response = session.get(download_url, timeout=60)
-    if not response.ok or not response.content:
-        raise ImageGenerationError("download image failed")
+    image_bytes = _download_image_bytes(session, download_url)
 
-    file_hash = hashlib.md5(response.content).hexdigest()
+    file_hash = hashlib.md5(image_bytes).hexdigest()
     timestamp = int(time.time())
     filename = f"{timestamp}_{file_hash}.png"
     relative_dir = Path(time.strftime("%Y"), time.strftime("%m"), time.strftime("%d"))
     file_path = config.images_dir / relative_dir / filename
     file_path.parent.mkdir(parents=True, exist_ok=True)
-    file_path.write_bytes(response.content)
+    file_path.write_bytes(image_bytes)
     return SavedImageFile(
         path=file_path,
         relative_path=relative_dir.joinpath(filename).as_posix(),
