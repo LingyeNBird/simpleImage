@@ -110,8 +110,25 @@ def _build_generation_payload(
     return payload
 
 
-def _build_edit_form_payload(payload: Mapping[str, object]) -> dict[str, str]:
-    return {key: str(value) for key, value in payload.items() if value is not None}
+def _build_edit_multipart(payload: Mapping[str, object], images: list[tuple[bytes, str, str]]) -> CurlMime:
+    parts: list[dict[str, object]] = [
+        {
+            "name": key,
+            "data": str(value).encode("utf-8"),
+        }
+        for key, value in payload.items()
+        if value is not None
+    ]
+    parts.extend(
+        {
+            "name": "image[]",
+            "filename": file_name or "image.png",
+            "content_type": mime_type or "image/png",
+            "data": image_bytes,
+        }
+        for image_bytes, file_name, mime_type in images
+    )
+    return CurlMime.from_list(parts)
 
 
 def _extract_error_text(response: object) -> str:
@@ -282,25 +299,13 @@ def edit_image_result_via_cpa(
     api_key = _resolve_cpa_api_key()
     output_mime_type = _resolve_output_mime_type(options.output_format)
     payload = _build_generation_payload(prompt, model, count, response_format, size, options)
-    multipart = CurlMime.from_list(
-        [
-            {
-                "name": "image[]",
-                "filename": file_name or "image.png",
-                "content_type": mime_type or "image/png",
-                "data": image_bytes,
-            }
-            for image_bytes, file_name, mime_type in images
-        ]
-    )
-    form_payload = _build_edit_form_payload(payload)
+    multipart = _build_edit_multipart(payload, images)
     session = _new_session()
     try:
         try:
             response = session.post(
                 f"{request_base_url}/v1/images/edits",
                 headers=_build_headers(api_key),
-                data=form_payload,
                 multipart=multipart,
                 timeout=180,
             )
